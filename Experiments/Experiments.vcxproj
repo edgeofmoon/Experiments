@@ -82,7 +82,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="MyBitmap.cpp" />
     <ClCompile Include="MyGraphicsTool.cpp" />
+    <ClCompile Include="MyImage.cpp" />
     <ClCompile Include="MyRayCasting.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -116,8 +118,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MyArray.h" />
+    <ClInclude Include="MyBitmap.h" />
     <ClInclude Include="MyColor4.h" />
     <ClInclude Include="MyGraphicsTool.h" />
+    <ClInclude Include="MyImage.h" />
     <ClInclude Include="MyMatrix.h" />
     <ClInclude Include="MyString.h" />
     <ClInclude Include="MyTrackBall.h" />
@@ -146,6 +150,8 @@
     <ClInclude Include="Shader.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="coord.frag" />
+    <None Include="coord.vert" />
     <None Include="raycasting.frag" />
     <None Include="raycasting.vert" />
   </ItemGroup>

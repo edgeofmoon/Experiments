@@ -96,6 +96,12 @@
     <ClCompile Include="Ric\nemardr.cpp">
       <Filter>Ric</Filter>
     </ClCompile>
+    <ClCompile Include="MyBitmap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyImage.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -185,12 +191,24 @@
     <ClInclude Include="Ric\nemardr.h">
       <Filter>Ric</Filter>
     </ClInclude>
+    <ClInclude Include="MyBitmap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyImage.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="raycasting.vert">
       <Filter>Shader Files</Filter>
     </None>
     <None Include="raycasting.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="coord.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="coord.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

@@ -5,7 +5,9 @@ uniform mat4x4 mvMat;
 uniform mat4x4 projMat;
 
 uniform sampler3D densityVol;
+uniform sampler3D gradVol;
 uniform sampler2D backFace;
+uniform sampler2D colorMap;
 
 uniform vec3 volSize;
 
@@ -22,7 +24,6 @@ out vec3 fragPos;
 out vec3 rawPos;
 
 void main() {
-	
 	fragPos = (mvMat*vec4(position,1)).xyz;
 	rawPos = position;
 	gl_Position = projMat*mvMat*vec4(position,1);

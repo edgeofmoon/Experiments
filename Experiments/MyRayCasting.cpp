@@ -7,10 +7,15 @@ using namespace std;
 
 #include "MyTrackBall.h"
 #include "MyGraphicsTool.h"
+#include "MyBitmap.h"
 
 #include "Ric/RicVolume.h"
 
+
 RicVolume vol;
+
+MyBitmap bitmap;
+GLuint colorTex;
 
 int windowWidth = 1024;
 int windowHeight = 768;
@@ -18,26 +23,28 @@ int windowHeight = 768;
 MyTrackBall trackBall;
 int cubeProgram;
 GLuint backTexture, cubefbo, depthBuffer;
+GLuint rayfbo, rayTex, rayDepth;
 float cubeBufferScale = 1;
 GLuint volTex;
+GLuint volGradTex;
 GLuint vertexArray2;
+GLuint vertextBuffer, indexBuffer;
 
 int shaderProgram; 
 GLuint vertexArray;
+GLuint vertextBuffer2, indexBuffer2;
+
+bool isRotating = false;
 
 // shading parameter;
-float decayFactor = 10;
+float decayFactor = 1000;
 float thresHigh = 1.0;
 float thresLow = 0.0;
 float sampeRate = 100.f;
 
-float size = 1;
-float vertices[8][3] = {
-	{ 0, 0, size }, { 0, size, size },
-	{ size, 0, size }, { size, size, size },
-	{ 0, 0, 0 }, { 0, size, 0 },
-	{ size, 0, 0 }, { size, size, 0 },
-};
+MyVec3f sizeLow(0, 0, 0);
+MyVec3f sizeHigh(1, 1, 1);
+
 
 int faces[6][4] = {
 	{ 0, 1, 3, 2 },
@@ -56,9 +63,16 @@ int CompileShader(){
 
 void drawCube(){
 
+	float vertices[8][3] = {
+		{ 0, 0, 1 }, { 1, 0, 1 },
+		{ 0, 1, 1 }, { 1, 1, 1 },
+		{ 0, 0, 0 }, { 1, 0, 0 },
+		{ 0, 1, 0 }, { 1, 1, 0 },
+	};
 
 	for (int i = 0; i < 6; i++){
-		glBegin(GL_TRIANGLE_FAN);
+		//glBegin(GL_TRIANGLE_FAN);
+		glBegin(GL_LINE_LOOP);
 		for (int j = 0; j < 4; j++){
 			int idx = faces[i][j];
 			glColor3fv(vertices[idx]);
@@ -66,6 +80,28 @@ void drawCube(){
 		}
 		glEnd();
 	}
+}
+
+MyVec3f* MakeGradients(){
+	int xmax = vol.get_numx() - 1;
+	int ymax = vol.get_numy() - 1;
+	int zmax = vol.get_numz() - 1;
+	MyVec3f* gradients = new MyVec3f[vol.nvox];
+	for (int i = 0; i < vol.get_numx(); i++){
+		for (int j = 0; j < vol.get_numy(); j++){
+			for (int k = 0; k < vol.get_numz(); k++){
+				float x0 = vol.vox[max(i - 1, 0)][j][k];
+				float x1 = vol.vox[min(i + 1, xmax)][j][k];
+				float y0 = vol.vox[i][max(j - 1, 0)][k];
+				float y1 = vol.vox[i][min(j + 1, ymax)][k];
+				float z0 = vol.vox[i][j][max(k - 1, 0)];
+				float z1 = vol.vox[i][j][min(k + 1, zmax)];
+				int idx = i*vol.get_numy()*vol.get_numz() + j * vol.get_numz() + k;
+				gradients[idx] = MyVec3f(x1 - x0, y1 - y0, z1 - z0);
+			}
+		}
+	}
+	return gradients;
 }
 
 int RenderCubeCoords(){
@@ -79,7 +115,7 @@ int RenderCubeCoords(){
 	glPushMatrix();
 	glTranslatef(0, 0, -1000);
 	MyGraphicsTool::LoadTrackBall(&trackBall);
-	glTranslatef(-0.5*size, -0.5*size, -0.5*size);
+	glTranslatef(-0.5, -0.5, -0.5);
 	glCullFace(GL_FRONT);
 	glUseProgram(cubeProgram);
 	int location = glGetUniformLocation(cubeProgram, "mvMat");
@@ -97,13 +133,8 @@ int RenderCubeCoords(){
 	glBindVertexArray(0);
 	glUseProgram(0);
 
-	//MyGraphicsTool::Color(MyColor4f(1, 1, 1));
-	//glutSolidSphere(20, 10, 10);
-	
 	glPopMatrix();
 
-	//glBindTexture(GL_TEXTURE_2D, backTexture);
-	//glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 0, 0, windowWidth*cubeBufferScale, windowHeight*cubeBufferScale, 0);
 	glDisable(GL_CULL_FACE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	return 1;
@@ -117,10 +148,97 @@ int LoadVolumeTexture(){
 	glBindTexture(GL_TEXTURE_3D, volTex);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	/*
+	float *d = new float[256 * 256 * 256];
+	for (int i = 0; i < 256 * 256 * 256; i++){
+		int x = i / (256 * 256);
+		int y = (i % (256 * 256)) / 256;
+		int z = (i % (256 * 256)) % 256;
+		if (x < vol.get_numx() && y < vol.get_numy() && z < vol.get_numz()){
+			d[i] = vol.vox[x][y][z];
+		}
+		else{
+			d[i] = 0;
+		}
+	}
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16F, 256, 256, 256, 0, GL_RED, GL_FLOAT, d);
+	delete[]d;
+	*/
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16F, vol.get_numx(), vol.get_numy(), vol.get_numz(), 0, GL_RED, GL_FLOAT, vol.varray);
+	
+	//glGenerateMipmap(GL_TEXTURE_3D);
 	glBindTexture(GL_TEXTURE_3D, 0);
+	return 1;
+}
+
+int LoadVolumeGradientTexture(){
+	if (glIsTexture(volGradTex)){
+		glDeleteTextures(1, &volGradTex);
+	}
+	glGenTextures(1, &volGradTex);
+	MyVec3f *grad = MakeGradients();
+	glBindTexture(GL_TEXTURE_3D, volGradTex);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, vol.get_numx(), vol.get_numy(), vol.get_numz(), 0, GL_RGB, GL_FLOAT, grad);
+	glBindTexture(GL_TEXTURE_3D, 0);
+	delete grad;
+	return 1;
+}
+
+int LoadTestVolumeTexture(){
+	if (glIsTexture(volTex)){
+		glDeleteTextures(1, &volTex);
+	}
+	glGenTextures(1, &volTex);
+	glBindTexture(GL_TEXTURE_3D, volTex);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	float* densitySphere = new float[vol.get_numx()*vol.get_numy()*vol.get_numz()];
+	for (int i = 0; i < vol.get_numx()*vol.get_numy()*vol.get_numz(); i++){
+		float z = i / (vol.get_numx()*vol.get_numy());
+		float y = (i % (vol.get_numx()*vol.get_numy())) / vol.get_numx();
+		float x = i % vol.get_numx();
+		z = z / vol.get_numz() - 0.5;
+		y = y / vol.get_numy() - 0.5;
+		x = x / vol.get_numx() - 0.5;
+		float radius =sqrtf( x*x + y*y + z*z);
+		if (radius < 0.25 || radius > 0.35) densitySphere[i] = 0;
+		else densitySphere[i] = max(1 - 2 * radius, 0.f);
+	}
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16F, vol.get_numx(), vol.get_numy(), vol.get_numz(), 0, GL_RED, GL_FLOAT, densitySphere);
+	//glGenerateMipmap(GL_TEXTURE_3D);
+	glBindTexture(GL_TEXTURE_3D, 0);
+	delete[] densitySphere;
+	return 1;
+}
+
+int LoadColorMap(){
+	if (glIsTexture(colorTex)){
+		glDeleteTextures(1, &colorTex);
+	}
+	glGenTextures(1, &colorTex);
+	glBindTexture(GL_TEXTURE_2D, colorTex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, bitmap.GetWidth(), bitmap.GetHeight(), 0, GL_BGR, GL_UNSIGNED_BYTE, bitmap.GetPixelBufferRGB());
+	glBindTexture(GL_TEXTURE_2D, 0);
 	return 1;
 }
 
@@ -129,26 +247,25 @@ int BuildGLBuffers(){
 	int w = windowWidth*cubeBufferScale;
 	int h = windowHeight*cubeBufferScale;
 
+
+	// cube
 	if (glIsTexture(backTexture)) {
 		glDeleteTextures(1, &backTexture);
 	}
 	glGenTextures(1, &backTexture);
 	glBindTexture(GL_TEXTURE_2D, backTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_FLOAT, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
-
 	if (glIsFramebuffer(cubefbo)) {
 		glDeleteFramebuffers(1, &cubefbo);
 	}
 	glGenFramebuffers(1, &cubefbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, cubefbo);
-
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, backTexture, 0);
-
 	if (glIsRenderbuffer(depthBuffer)){
 		glDeleteRenderbuffers(1, &depthBuffer);
 	}
@@ -156,10 +273,37 @@ int BuildGLBuffers(){
 	glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, w, h);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
-
 	GLenum DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
 	glDrawBuffers(1, DrawBuffers);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+
+	// render
+	if (glIsTexture(rayTex)) {
+		glDeleteTextures(1, &rayTex);
+	}
+	glGenTextures(1, &rayTex);
+	glBindTexture(GL_TEXTURE_2D, rayTex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_FLOAT, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	if (glIsFramebuffer(rayfbo)) {
+		glDeleteFramebuffers(1, &rayfbo);
+	}
+	glGenFramebuffers(1, &rayfbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, rayfbo);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, rayTex, 0);
+	if (glIsRenderbuffer(rayDepth)){
+		glDeleteRenderbuffers(1, &rayDepth);
+	}
+	glGenRenderbuffers(1, &rayDepth);
+	glBindRenderbuffer(GL_RENDERBUFFER, rayDepth);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, w, h);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rayDepth);
+	glDrawBuffers(1, DrawBuffers);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	
 	return 1;
@@ -199,20 +343,18 @@ void RenderTexture(int texture){
 
 }
 
-void display(){
+void RenderRay(){
 
-
-	RenderCubeCoords();
+	//glBindFramebuffer(GL_FRAMEBUFFER, rayfbo);
 
 	MyGraphicsTool::SetBackgroundColor(MyColor4f(0, 0, 0, 0));
 	MyGraphicsTool::ClearFrameBuffer();
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
-
-	
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth*cubeBufferScale, windowHeight*cubeBufferScale));
+	//MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
 	glPushMatrix();
 	glTranslatef(0, 0, -1000);
 	MyGraphicsTool::LoadTrackBall(&trackBall);
-	glTranslatef(-0.5*size, -0.5*size, -0.5*size);
+	glTranslatef(-0.5, -0.5, -0.5);
 
 	glUseProgram(shaderProgram);
 	int location = glGetUniformLocation(shaderProgram, "mvMat");
@@ -230,10 +372,22 @@ void display(){
 	glActiveTexture(GL_TEXTURE0 + 0);
 	glBindTexture(GL_TEXTURE_3D, volTex);
 
+	if (glIsTexture(volGradTex)){
+		location = glGetUniformLocation(shaderProgram, "gradVol");
+		glUniform1i(location, 1);
+		glActiveTexture(GL_TEXTURE0 + 1);
+		glBindTexture(GL_TEXTURE_3D, volGradTex);
+	}
+
 	location = glGetUniformLocation(shaderProgram, "backFace");
-	glUniform1i(location, 1);
-	glActiveTexture(GL_TEXTURE0 + 1);
+	glUniform1i(location, 2);
+	glActiveTexture(GL_TEXTURE0 + 2);
 	glBindTexture(GL_TEXTURE_2D, backTexture);
+
+	location = glGetUniformLocation(shaderProgram, "colorMap");
+	glUniform1i(location, 3);
+	glActiveTexture(GL_TEXTURE0 + 3);
+	glBindTexture(GL_TEXTURE_2D, colorTex);
 
 	location = glGetUniformLocation(shaderProgram, "volSize");
 	glUniform3f(location, vol.get_numx(), vol.get_numy(), vol.get_numz());
@@ -254,7 +408,12 @@ void display(){
 	glUniform1f(location, thresLow);
 
 	location = glGetUniformLocation(shaderProgram, "sampeRate");
-	glUniform1f(location, sampeRate);
+	if (isRotating){
+		glUniform1f(location, min(sampeRate,256.f));
+	}
+	else{
+		glUniform1f(location, sampeRate);
+	}
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
@@ -264,7 +423,91 @@ void display(){
 	glDisable(GL_CULL_FACE);
 	glUseProgram(0);
 
+	drawCube();
 	glPopMatrix();
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void updateShaderData(){
+	float vertices[8][3] = {
+		{ sizeLow[0], sizeLow[1], sizeHigh[2] }, { sizeHigh[0], sizeLow[1], sizeHigh[2] },
+		{ sizeLow[0], sizeHigh[1], sizeHigh[2] }, { sizeHigh[0], sizeHigh[1], sizeHigh[2] },
+		{ sizeLow[0], sizeLow[1], sizeLow[2] }, { sizeHigh[0], sizeLow[1], sizeLow[2] },
+		{ sizeLow[0], sizeHigh[1], sizeLow[2] }, { sizeHigh[0], sizeHigh[1], sizeLow[2] },
+	};
+	glBindVertexArray(vertexArray);
+	glBindBuffer(GL_ARRAY_BUFFER, vertextBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+
+	glBindVertexArray(vertexArray2);
+	glBindBuffer(GL_ARRAY_BUFFER, vertextBuffer2);
+	glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void loadShaderData(){
+	// index
+	int index[36];
+	for (int i = 0; i < 6; i++){
+		index[i * 6 + 0] = faces[i][0];
+		index[i * 6 + 1] = faces[i][1];
+		index[i * 6 + 2] = faces[i][2];
+		index[i * 6 + 3] = faces[i][0];
+		index[i * 6 + 4] = faces[i][2];
+		index[i * 6 + 5] = faces[i][3];
+	}
+	float vertices[8][3] = {
+		{ sizeLow[0], sizeLow[1], sizeHigh[2] }, { sizeHigh[0], sizeLow[1], sizeHigh[2] },
+		{ sizeLow[0], sizeHigh[1], sizeHigh[2] }, { sizeHigh[0], sizeHigh[1], sizeHigh[2] },
+		{ sizeLow[0], sizeLow[1], sizeLow[2] }, { sizeHigh[0], sizeLow[1], sizeLow[2] },
+		{ sizeLow[0], sizeHigh[1], sizeLow[2] }, { sizeHigh[0], sizeHigh[1], sizeLow[2] },
+	};
+
+	// vertex
+	glGenVertexArrays(1, &vertexArray);
+	glBindVertexArray(vertexArray);
+	glGenBuffers(1, &vertextBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertextBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
+	int location = glGetAttribLocation(shaderProgram, "position");
+	glEnableVertexAttribArray(location);
+	glVertexAttribPointer(location, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glGenBuffers(1, &indexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(int), &index, GL_STATIC_DRAW);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	// vertex2
+	glGenVertexArrays(1, &vertexArray2);
+	glBindVertexArray(vertexArray2);
+	glGenBuffers(1, &vertextBuffer2);
+	glBindBuffer(GL_ARRAY_BUFFER, vertextBuffer2);
+	glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
+	location = glGetAttribLocation(cubeProgram, "position");
+	glEnableVertexAttribArray(location);
+	glVertexAttribPointer(location, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glGenBuffers(1, &indexBuffer2);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer2);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(int), &index, GL_STATIC_DRAW);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+}
+
+void display(){
+
+	RenderCubeCoords();
+	RenderRay();
+
+	//MyGraphicsTool::ClearFrameBuffer();
 	//RenderTexture(backTexture);
 
 	glutSwapBuffers();
@@ -273,10 +516,13 @@ void display(){
 void mouseKey(int button, int state, int x, int y){
 	if (state == GLUT_DOWN){
 		trackBall.StartMotion(x, y);
+		isRotating = true;
 	}
 	else if (state == GLUT_UP){
 		trackBall.EndMotion(x, y);
+		isRotating = false;
 	}
+	glutPostRedisplay();
 }
 
 void mouseMove(int x, int y){
@@ -296,15 +542,15 @@ void key(unsigned char c, int x, int y){
 		glutPostRedisplay();
 		break;
 	case 'd':
-		decayFactor *= 2;
+		decayFactor *= 1.2;
 		glutPostRedisplay();
 		break;
 	case 'D':
-		decayFactor /= 2;
+		decayFactor /= 1.2;
 		glutPostRedisplay();
 		break;
 	case 's':
-		sampeRate = min(sampeRate*1.1f, 512.f);
+		sampeRate = min(sampeRate*1.1f, 16384.f);
 		glutPostRedisplay();
 		break;
 	case 'S':
@@ -325,6 +571,26 @@ void key(unsigned char c, int x, int y){
 		break;
 	case 'L':
 		thresLow = max(thresLow-0.05f, 0.f);
+		glutPostRedisplay();
+		break;
+	case 'b':
+		sizeLow[0] = min(sizeLow[0]+0.05f, sizeHigh[0]);
+		updateShaderData();
+		glutPostRedisplay();
+		break;
+	case 'B':
+		sizeLow[0] = max(sizeLow[0] - 0.05f, 0.f);
+		updateShaderData();
+		glutPostRedisplay();
+		break;
+	case 'n':
+		sizeHigh[0] = min(sizeHigh[0] + 0.05f, 1.f);
+		updateShaderData();
+		glutPostRedisplay();
+		break;
+	case 'N':
+		sizeHigh[0] = max(sizeHigh[0] - 0.05f, 0.f);
+		updateShaderData();
 		glutPostRedisplay();
 		break;
 	default:
@@ -356,58 +622,25 @@ int main(int argc, char* argv[]){
 	glutKeyboardFunc(key);
 
 	//vol.Read("Control_GCC_60.nii");
-	vol.Read("dti_fa.nii");
+	//vol.Read("dti_fa.nii");
+	//vol.Read("average.nii");
+	vol.Read("average_s1.nii");
+	//vol.Read("average_sphere5.nii.gz");
+	//vol.Read("JHU-WhiteMatter-labels-1mm.nii");
+	//vol -= vol.min;
 	vol /= vol.max;
-	CompileShader();
 	LoadVolumeTexture();
+	//LoadVolumeGradientTexture();
+	//LoadTestVolumeTexture();
 
-	// index
-	int index[36];
-	for (int i = 0; i < 6; i++){
-		index[i * 6 + 0] = faces[i][0];
-		index[i * 6 + 1] = faces[i][1];
-		index[i * 6 + 2] = faces[i][2];
-		index[i * 6 + 3] = faces[i][0];
-		index[i * 6 + 4] = faces[i][2];
-		index[i * 6 + 5] = faces[i][3];
-	}
+	bitmap.Open("colorScale0.bmp");
+	LoadColorMap();
+
+	CompileShader();
 
 
-	// vertex
-	GLuint vertextBuffer, indexBuffer;
-	glGenVertexArrays(1, &vertexArray);
-	glBindVertexArray(vertexArray);
-	glGenBuffers(1, &vertextBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertextBuffer);
-	glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(float), vertices, GL_STATIC_DRAW);
-	int location = glGetAttribLocation(shaderProgram, "position");
-	glEnableVertexAttribArray(location);
-	glVertexAttribPointer(location, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glGenBuffers(1, &indexBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(int), &index, GL_STATIC_DRAW);
-	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	// vertex2
-	GLuint vertextBuffer2, indexBuffer2;
-	glGenVertexArrays(1, &vertexArray2);
-	glBindVertexArray(vertexArray2);
-	glGenBuffers(1, &vertextBuffer2);
-	glBindBuffer(GL_ARRAY_BUFFER, vertextBuffer2);
-	glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(float), vertices, GL_STATIC_DRAW);
-	location = glGetAttribLocation(cubeProgram, "position");
-	glEnableVertexAttribArray(location);
-	glVertexAttribPointer(location, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-	glGenBuffers(1, &indexBuffer2);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer2);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(int), &index, GL_STATIC_DRAW);
-	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
+	loadShaderData();
 	trackBall.ScaleAdd(0.6);
 
 	glutMainLoop();

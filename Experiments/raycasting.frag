@@ -181,6 +181,18 @@ vec4 GetLightedColor(vec3 loc, vec3 pos, float density){
 	return rstColour;
 }
 
+void WriteDepth(vec3 pos){
+	float far=gl_DepthRange.far; 
+	float near=gl_DepthRange.near;
+
+	vec4 clip_space_pos = projMat * mvMat * vec4(pos,1);
+
+	float ndc_depth = clip_space_pos.z / clip_space_pos.w;
+
+	float depth = (((far-near) * ndc_depth) + near + far) / 2.0;
+	gl_FragDepth = depth;
+}
+
 void main() {
 	fragColour=vec4(0,0,0,1);
 	//fragColour=texture(backFace, vec2(gl_FragCoord.x/windowWidth, gl_FragCoord.y/windowHeight));
@@ -215,8 +227,11 @@ void main() {
 		if(accTransparency <= 0.01) break;
 		//if(accDistance>distance) break;
 	}
-	fragColour=vec4(accColor*(1-accTransparency),1);
-	
+	fragColour=vec4(accColor*(1-accTransparency),(1-accTransparency));
+	//fragColour=vec4(accTransparency,accTransparency,accTransparency,accTransparency);
+	vec3 dir2 = normalize(vec3(inverse(mvMat)*vec4(eyeDir,0)));
+	vec3 pos = rawPos+dir2*accDistance;
+	WriteDepth(pos);
 
 	/*
 	// density->color map

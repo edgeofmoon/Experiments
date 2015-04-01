@@ -102,6 +102,39 @@
     <ClCompile Include="MyImage.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Ric\RicMesh.cpp">
+      <Filter>Ric</Filter>
+    </ClCompile>
+    <ClCompile Include="Ric\RicMeshSet.cpp">
+      <Filter>Ric</Filter>
+    </ClCompile>
+    <ClCompile Include="Ric\RicTexture.cpp">
+      <Filter>Ric</Filter>
+    </ClCompile>
+    <ClCompile Include="Ric\RicTextureSet.cpp">
+      <Filter>Ric</Filter>
+    </ClCompile>
+    <ClCompile Include="Ric\minigzip.c">
+      <Filter>Ric</Filter>
+    </ClCompile>
+    <ClCompile Include="MyMesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyBoundingBox.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyPrimitiveDrawer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyMathHelper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyQuarternion.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="svd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -197,6 +230,45 @@
     <ClInclude Include="MyImage.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Ric\dtypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Ric\RicMesh.h">
+      <Filter>Ric</Filter>
+    </ClInclude>
+    <ClInclude Include="Ric\RicMeshSet.h">
+      <Filter>Ric</Filter>
+    </ClInclude>
+    <ClInclude Include="Ric\RicTexture.h">
+      <Filter>Ric</Filter>
+    </ClInclude>
+    <ClInclude Include="Ric\RicTextureSet.h">
+      <Filter>Ric</Filter>
+    </ClInclude>
+    <ClInclude Include="MyMesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyBoundingBox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyPrimitiveDrawer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyLine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyPolyLine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyMathHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyQuarternion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="svd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="raycasting.vert">
@@ -209,6 +281,12 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="coord.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="mesh.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="mesh.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

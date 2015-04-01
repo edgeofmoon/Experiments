@@ -225,7 +225,7 @@ void MyGraphicsTool::Vertices(const MyArray2f& vec){
 	}
 }
 
-void Normal(const MyVec3f& vec){
+void MyGraphicsTool::Normal(const MyVec3f& vec){
 	glNormal3f(vec[0],vec[1],vec[2]);
 }
 

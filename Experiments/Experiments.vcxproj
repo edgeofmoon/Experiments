@@ -83,8 +83,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="MyBitmap.cpp" />
+    <ClCompile Include="MyBoundingBox.cpp" />
     <ClCompile Include="MyGraphicsTool.cpp" />
     <ClCompile Include="MyImage.cpp" />
+    <ClCompile Include="MyMathHelper.cpp" />
+    <ClCompile Include="MyMesh.cpp" />
+    <ClCompile Include="MyPrimitiveDrawer.cpp" />
+    <ClCompile Include="MyQuarternion.cpp" />
     <ClCompile Include="MyRayCasting.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -100,9 +105,17 @@
     <ClCompile Include="Ric\inffast.c" />
     <ClCompile Include="Ric\inflate.c" />
     <ClCompile Include="Ric\inftrees.c" />
+    <ClCompile Include="Ric\minigzip.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="Ric\nemardr.cpp" />
     <ClCompile Include="Ric\nifti1_io.c" />
     <ClCompile Include="Ric\NiftiOrientConvert.cpp" />
+    <ClCompile Include="Ric\RicMesh.cpp" />
+    <ClCompile Include="Ric\RicMeshSet.cpp" />
+    <ClCompile Include="Ric\RicTexture.cpp" />
+    <ClCompile Include="Ric\RicTextureSet.cpp" />
     <ClCompile Include="Ric\RicUtil.cpp" />
     <ClCompile Include="Ric\RicVolume.cpp" />
     <ClCompile Include="Ric\RicVolumeSet.cpp" />
@@ -111,6 +124,7 @@
     <ClCompile Include="Ric\znzlib.c" />
     <ClCompile Include="Ric\zutil.c" />
     <ClCompile Include="Shader.cpp" />
+    <ClCompile Include="svd.c" />
     <ClCompile Include="Wijk_FlowVis.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
@@ -119,16 +133,24 @@
   <ItemGroup>
     <ClInclude Include="MyArray.h" />
     <ClInclude Include="MyBitmap.h" />
+    <ClInclude Include="MyBoundingBox.h" />
     <ClInclude Include="MyColor4.h" />
     <ClInclude Include="MyGraphicsTool.h" />
     <ClInclude Include="MyImage.h" />
+    <ClInclude Include="MyLine.h" />
+    <ClInclude Include="MyMathHelper.h" />
     <ClInclude Include="MyMatrix.h" />
+    <ClInclude Include="MyMesh.h" />
+    <ClInclude Include="MyPolyLine.h" />
+    <ClInclude Include="MyPrimitiveDrawer.h" />
+    <ClInclude Include="MyQuarternion.h" />
     <ClInclude Include="MyString.h" />
     <ClInclude Include="MyTrackBall.h" />
     <ClInclude Include="MyUtility.h" />
     <ClInclude Include="MyVec.h" />
     <ClInclude Include="Ric\crc32.h" />
     <ClInclude Include="Ric\deflate.h" />
+    <ClInclude Include="Ric\dtypes.h" />
     <ClInclude Include="Ric\inffast.h" />
     <ClInclude Include="Ric\inffixed.h" />
     <ClInclude Include="Ric\inflate.h" />
@@ -137,7 +159,11 @@
     <ClInclude Include="Ric\nifti1.h" />
     <ClInclude Include="Ric\nifti1_io.h" />
     <ClInclude Include="Ric\RicMatrix.h" />
+    <ClInclude Include="Ric\RicMesh.h" />
+    <ClInclude Include="Ric\RicMeshSet.h" />
     <ClInclude Include="Ric\RicPoint.h" />
+    <ClInclude Include="Ric\RicTexture.h" />
+    <ClInclude Include="Ric\RicTextureSet.h" />
     <ClInclude Include="Ric\RicUtil.h" />
     <ClInclude Include="Ric\RicVolume.h" />
     <ClInclude Include="Ric\RicVolumeSet.h" />
@@ -148,10 +174,13 @@
     <ClInclude Include="Ric\znzlib.h" />
     <ClInclude Include="Ric\zutil.h" />
     <ClInclude Include="Shader.h" />
+    <ClInclude Include="svd.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="coord.frag" />
     <None Include="coord.vert" />
+    <None Include="mesh.frag" />
+    <None Include="mesh.vert" />
     <None Include="raycasting.frag" />
     <None Include="raycasting.vert" />
   </ItemGroup>

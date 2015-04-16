@@ -68,7 +68,7 @@ void MyTrackBall::RotateMotion(int x, int y)
   /* calculate the angle to rotate by (directly proportional to the
      length of the mouse movement */
   MyVec3f diff = current_position - mLastPos;
-  mAngle = 3 * 90.0f*diff.norm();
+  mAngle = - 3 * 90.0f*diff.norm();
 
   /* calculate the axis of rotation (cross product) */
   mAxis = mLastPos^current_position;

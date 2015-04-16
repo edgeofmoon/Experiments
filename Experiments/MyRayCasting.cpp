@@ -13,7 +13,7 @@ using namespace std;
 #include "Ric/RicVolume.h"
 #include "Ric/RicMesh.h"
 
-
+bool bStereo = true;
 RicVolume vol;
 MyMesh mesh;
 
@@ -244,6 +244,7 @@ int LoadVolumeTexture(){
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 	
+	// map x,y,z to z,y,x
 	float *d = new float[vol.nvox];
 	for (int i = 0; i < vol.get_numx(); i++){
 		for (int j = 0; j < vol.get_numx(); j++){
@@ -629,11 +630,67 @@ void loadShaderData(){
 
 void display(){
 
-	RenderCubeCoords();
-	RenderRay();
-
+	//glDrawBuffer(GL_BACK);
+	MyGraphicsTool::SetBackgroundColor(MyColor4f(0, 0, 0, 0));
 	//MyGraphicsTool::ClearFrameBuffer();
-	//RenderTexture(backTexture);
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth*cubeBufferScale, windowHeight*cubeBufferScale));
+
+	float caperture = 90;
+	float cnear = 50;
+	float cfar = zDistance*2;
+	float displayDistance = zDistance;
+	float eyesep = 65;
+	float ratio = windowWidth / (double)windowHeight;
+	float vwidth = 500.f;
+	float vheight = 500 / ratio;
+
+	if (bStereo){
+		glDrawBuffer(GL_BACK_LEFT);
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		float left = -(cnear * ((vwidth / 2.f - eyesep / 2.f) / displayDistance));
+		float right = (cnear * ((vwidth / 2.f + eyesep / 2.f) / displayDistance));
+		float top = (cnear * ((vheight / 2.f) / displayDistance));
+		float bottom = -(cnear * ((vheight / 2.f) / displayDistance));
+		glFrustum(left, right, bottom, top, cnear, cfar);
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+		gluLookAt(-eyesep / 2, 0, 0, -eyesep / 2, 0, -zDistance, 0, 1, 0);
+		RenderCubeCoords();
+		RenderRay();
+		glPopMatrix();
+
+		glDrawBuffer(GL_BACK_RIGHT);
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		left = -(cnear * ((vwidth / 2.f + eyesep / 2.f) / displayDistance));
+		right = (cnear * ((vwidth / 2.f - eyesep / 2.f) / displayDistance));
+		glFrustum(left, right, bottom, top, cnear, cfar);
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+		gluLookAt(eyesep / 2, 0, 0, eyesep / 2, 0, -zDistance, 0, 1, 0);
+		RenderCubeCoords();
+		RenderRay();
+		glPopMatrix();
+	}
+	else{
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		float left = -(cnear * ((vwidth / 2.f ) / displayDistance));
+		float right = (cnear * ((vwidth / 2.f ) / displayDistance));
+		float top = (cnear * ((vheight / 2.f) / displayDistance));
+		float bottom = -(cnear * ((vheight / 2.f) / displayDistance));
+		glFrustum(left, right, bottom, top, cnear, cfar);
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+		gluLookAt(eyesep / 2, 0, 0, eyesep / 2, 0, -zDistance, 0, 1, 0);
+		RenderCubeCoords();
+		RenderRay();
+		glPopMatrix();
+	}
 
 	glutSwapBuffers();
 }
@@ -658,6 +715,9 @@ void mouseMove(int x, int y){
 void key(unsigned char c, int x, int y){
 	switch (c)
 	{
+	case 27:
+		exit(1);
+		break;
 	case 'z':
 		trackBall.ScaleAdd(0.05);
 		glutPostRedisplay();
@@ -728,9 +788,9 @@ void reshape(int w, int h){
 	windowHeight = h;
 	trackBall.Reshape(w, h);
 	//MyMatrixf projectionMatrix = MyMatrixf::PerspectiveMatrix(30, w / (float)h, 0.1f, 2000);
-	//zDistance = 10;
+	//zDistance = 2;
 	MyMatrixf projectionMatrix = MyMatrixf::OrthographicMatrix(-w/800.f,w/800.f,-h/800.f,h/800.f,0.1f,2000.f);
-	//zDistance = 1000;
+	zDistance = 500;
 	MyGraphicsTool::LoadProjectionMatrix(&projectionMatrix);
 	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
 	BuildGLBuffers();
@@ -739,8 +799,33 @@ void reshape(int w, int h){
 }
 
 int main(int argc, char* argv[]){
-	MyGraphicsTool::Init(&argc, argv);
+
+	vol.Read("average_s1.nii");
+	vol /= vol.max;
+
+	int read = mesh.Read("lh.pial.obj");
+	MyMesh mesh2;
+	read = mesh2.Read("rh.pial.obj");
+	mesh.Merge(mesh2);
+	mesh.GenPerVertexNormal();
+
+	//MyGraphicsTool::Init(&argc, argv);
+	glutInit(&argc, argv);
+
+
+	glutInitWindowSize(1024, 768);
+	
+	if (bStereo){
+		glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE | GLUT_STEREO);
+	}
+	else{
+		glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE);
+	}
+	glutCreateWindow("Graph Explorer");
 	glewInit();
+
+	//glutFullScreen();
+
 	glEnable(GL_DEPTH_TEST);
 	glutDisplayFunc(display);
 	glutMouseFunc(mouseKey);
@@ -749,32 +834,14 @@ int main(int argc, char* argv[]){
 	glutKeyboardFunc(key);
 
 	CompileShader();
-	//vol.Read("Control_GCC_60.nii");
-	//vol.Read("dti_fa.nii");
-	//vol.Read("average.nii");
-	vol.Read("average_s1.nii");
-	//vol.Read("average_sphere5.nii.gz");
-	//vol.Read("JHU-WhiteMatter-labels-1mm.nii");
-	//vol -= vol.min;
-	vol /= vol.max;
 	LoadVolumeTexture();
-	//LoadVolumeGradientTexture();
-	//LoadTestVolumeTexture();
 
-	int read = mesh.Read("lh.pial.obj");
-	MyMesh mesh2;
-	read = mesh2.Read("rh.pial.obj");
-	mesh.Merge(mesh2);
-	mesh.GenPerVertexNormal();
 
 	bitmap.Open("colorScale0.bmp");
 	LoadColorMap();
 
-
-
-
 	loadShaderData();
-	trackBall.ScaleAdd(0.6);
+	trackBall.ScaleAdd(120);
 
 	glutMainLoop();
 	return 1;

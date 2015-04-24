@@ -135,6 +135,12 @@
     <ClCompile Include="svd.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MyTracts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyTracks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -267,6 +273,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="svd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyTracts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyTracks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

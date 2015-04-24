@@ -9,13 +9,21 @@ using namespace std;
 #include "MyGraphicsTool.h"
 #include "MyBitmap.h"
 #include "MyMesh.h"
+#include "MyTracts.h"
+#include "MyTracks.h"
 
 #include "Ric/RicVolume.h"
 #include "Ric/RicMesh.h"
 
-bool bStereo = true;
+bool bStereo = false;
+// 0: middle, 1: left, 2:right
+int eyeIfNonStereo = 0;
 RicVolume vol;
 MyMesh mesh;
+MyTracts* ptract;
+MyTracks track;
+
+bool bdraw[3] = { true, true, false };
 
 MyBitmap bitmap;
 GLuint colorTex;
@@ -48,8 +56,8 @@ bool isRotating = false;
 // shading parameter;
 float decayFactor = 1000;
 float thresHigh = 1.0;
-float thresLow = 0.0;
-float sampeRate = 100.f;
+float thresLow = 0.1;
+float sampeRate = 512.f;
 
 MyVec3f sizeLow(0, 0, 0);
 MyVec3f sizeHigh(1, 1, 1);
@@ -69,6 +77,118 @@ int CompileShader(){
 	cubeProgram = InitShader("coord.vert", "coord.frag", "fragColour");
 	meshProgram = InitShader("mesh.vert", "mesh.frag", "fragColour");
 	return 1;
+}
+
+MyTracts* MakeTractsFromFile(const MyString& fileName){
+	ifstream inFile(fileName);
+	if (inFile.is_open()){
+		int numTracts;
+		inFile >> numTracts;
+		//numTracts = 10;;
+		MyTracts* ptracts = new MyTracts;
+		MyTracts& tracts = *ptracts;
+		for (int i = 0; i<numTracts; i++){
+			int numPoints;
+			inFile >> numPoints;
+			tracts.NewTract(numPoints);
+			for (int j = 0; j<numPoints; j++){
+				MyVec3f p;
+				inFile >> p[0] >> p[1] >> p[2];
+				MyColor4f c;
+				inFile >> c.r >> c.g >> c.b;
+				c.a = 1;
+				tracts << p;
+				tracts << c;
+			}
+		}
+		inFile.close();
+		return ptracts;
+	}
+	else{
+		cout << "Cannot open file " << fileName << endl;
+		return 0;
+	}
+}
+
+void drawTracts(MyTracts* tract){
+	static unsigned int displayList = -1;
+	if (!glIsList(displayList)){
+		displayList = glGenLists(1);
+		glNewList(displayList, GL_COMPILE);
+		for (int i = 0; i < tract->GetNumTracts(); i++){
+			glBegin(GL_LINE_STRIP);
+			for (int j = 0; j < tract->GetNumVertices(i); j++){
+				MyGraphicsTool::Color(tract->GetColor(i, j));
+				MyGraphicsTool::Vertex(tract->GetCoord(i, j));
+			}
+			glEnd();
+		}
+		glEndList();
+	}
+	glPushMatrix();
+	glTranslatef(0.5, 0.5, 0.5);
+	glScalef(1.f / vol.get_numx(), 1.f / vol.get_numy(), 1.f / vol.get_numz());
+	MyGraphicsTool::Translate(-ptract->GetBoundingBox().GetCenter());
+	glCallList(displayList);
+	glPopMatrix();
+}
+
+MyVec3f calculateNormal(Point _p1, Point _p2, Point _pole){
+	MyVec3f p1(_p1.x, _p1.y, _p1.z);
+	MyVec3f p2(_p2.x, _p2.y, _p2.z);
+	MyVec3f pole(_pole.x, _pole.y, _pole.z);
+
+	return (p1 - p2) ^ pole;
+}
+void drawTracks(MyTracks* track){
+	static unsigned int displayList = -1;
+	if (!glIsList(displayList)){
+		cout << "Building track display list " << endl;
+		displayList = glGenLists(1);
+		glNewList(displayList, GL_COMPILE);
+		for (int i = 0; i < track->GetNumTracks(); i++){
+			Point pole = track->GetPoint(i, track->GetNumVertex(i) - 1)
+				- track->GetPoint(i, 0);
+			glBegin(GL_LINE_STRIP);
+
+			for (int j = 0; j < track->GetNumVertex(i); j++){
+				Point p = track->GetPoint(i, j);
+				Point normal;
+				if (j == 0){
+					normal = (p - track->GetPoint(i, j + 1)).CrossProduct(pole);
+				}
+				else{
+					normal = (track->GetPoint(i, j - 1) - p).CrossProduct(pole);
+				}
+				normal.Normalize();
+				glNormal3f(normal.x, normal.y, normal.z);
+				float den = vol.get_at_index(p.x, vol.get_numy()-p.y, p.z);
+				MyColor4f color = bitmap.GetColor(den*(bitmap.GetWidth() - 1), 0);
+				MyGraphicsTool::Color(MyColor4f(color.b, color.g, color.r));
+				//glColor3f(den, den, den);
+				glVertex3f(p.x, p.y, p.z);
+			}
+			glEnd();
+			if (i % 100 == 0 || i == track->GetNumTracks() - 1){
+				MyString progress(100 * i / (float)(track->GetNumTracks() - 1));
+				progress.resize(5);
+				cout << "\r" << progress << "%";
+			}
+		}
+		glEndList();
+		cout << "Complete." << endl;
+	}
+	glPushMatrix();
+	glTranslatef(0.5, 0.5, 0.5);
+	glScalef(1, -1, 1);
+	glTranslatef(-0.5, -0.5, -0.5);
+	glScalef(1.f / vol.get_numx(), 1.f / vol.get_numy(), 1.f / vol.get_numz());
+	//glEnable(GL_LIGHTING);
+	//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+	//glEnable(GL_LIGHT0);
+	glCallList(displayList);
+	//glDisable(GL_LIGHTING);
+	glPopMatrix();
 }
 
 void drawMesh(const MyMesh& mesh){
@@ -506,15 +626,22 @@ void RenderRay(){
 		glUniform1f(location, sampeRate);
 	}
 
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
-	glBindVertexArray(vertexArray);
-	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
-	glDisable(GL_CULL_FACE);
+	if (bdraw[0]){
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		glBindVertexArray(vertexArray);
+		glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+		glDisable(GL_CULL_FACE);
+	}
 	glUseProgram(0);
 
-	drawMesh(mesh);
+	if (bdraw[2]){
+		drawTracks(&track);
+	}
+	if (bdraw[1]){
+		drawMesh(mesh);
+	}
 	glDisable(GL_BLEND);
 	glPopMatrix();
 	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -676,17 +803,28 @@ void display(){
 		glPopMatrix();
 	}
 	else{
+		if (eyeIfNonStereo == 0){
+			// middle eye
+			eyesep = 0;
+		}
+		else if (eyeIfNonStereo == 1){
+			// left eye
+		}
+		else{
+			// right eye
+			eyesep = -eyesep;
+		}
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
-		float left = -(cnear * ((vwidth / 2.f ) / displayDistance));
-		float right = (cnear * ((vwidth / 2.f ) / displayDistance));
+		float left = -(cnear * ((vwidth / 2.f - eyesep / 2.f) / displayDistance));
+		float right = (cnear * ((vwidth / 2.f + eyesep / 2.f) / displayDistance));
 		float top = (cnear * ((vheight / 2.f) / displayDistance));
 		float bottom = -(cnear * ((vheight / 2.f) / displayDistance));
 		glFrustum(left, right, bottom, top, cnear, cfar);
 		glMatrixMode(GL_MODELVIEW);
 		glPushMatrix();
 		glLoadIdentity();
-		gluLookAt(eyesep / 2, 0, 0, eyesep / 2, 0, -zDistance, 0, 1, 0);
+		gluLookAt(-eyesep / 2, 0, 0, -eyesep / 2, 0, -zDistance, 0, 1, 0);
 		RenderCubeCoords();
 		RenderRay();
 		glPopMatrix();
@@ -718,12 +856,18 @@ void key(unsigned char c, int x, int y){
 	case 27:
 		exit(1);
 		break;
+	case '1':
+	case '2':
+	case '3':
+		bdraw[c - '1'] = !bdraw[c - '1'];
+		glutPostRedisplay();
+		break;
 	case 'z':
-		trackBall.ScaleAdd(0.05);
+		trackBall.ScaleAdd(5);
 		glutPostRedisplay();
 		break;
 	case 'Z':
-		trackBall.ScaleAdd(-0.05);
+		trackBall.ScaleAdd(-5);
 		glutPostRedisplay();
 		break;
 	case 'd':
@@ -778,6 +922,11 @@ void key(unsigned char c, int x, int y){
 		updateShaderData();
 		glutPostRedisplay();
 		break;
+	case 'e':
+	case 'E':
+		eyeIfNonStereo = (eyeIfNonStereo + 1) % 3;
+		glutPostRedisplay();
+		break;
 	default:
 		break;
 	}
@@ -799,16 +948,23 @@ void reshape(int w, int h){
 }
 
 int main(int argc, char* argv[]){
-
+	cout << "Loading volume ..." << endl;
 	vol.Read("average_s1.nii");
 	vol /= vol.max;
 
+	cout << "Loading mesh ..." << endl;
 	int read = mesh.Read("lh.pial.obj");
 	MyMesh mesh2;
 	read = mesh2.Read("rh.pial.obj");
 	mesh.Merge(mesh2);
+
+	cout << "Calculating mesh normals ..." << endl;
 	mesh.GenPerVertexNormal();
 
+	cout << "Loading tracts ..." << endl;
+	//ptract = MakeTractsFromFile("region_s5.data");
+	//track.Read("ACR.trk");
+	track.Read("C:\\Users\\GuohaoZhang\\Desktop\\ACR_100.trk");
 	//MyGraphicsTool::Init(&argc, argv);
 	glutInit(&argc, argv);
 
@@ -841,7 +997,7 @@ int main(int argc, char* argv[]){
 	LoadColorMap();
 
 	loadShaderData();
-	trackBall.ScaleAdd(120);
+	trackBall.ScaleAdd(80);
 
 	glutMainLoop();
 	return 1;

@@ -1144,8 +1144,11 @@ int RicVolumeSet::Read_NIFTI(string fname)
 					{
 						for (k = 0; k < nim->nx; ++k)
 						{
-							data[k][j][i] = (*uptr)
-									* nim->scl_slope + nim->scl_inter;
+							// modified by Guohao
+							// 04/27/2015
+							//data[k][j][i] = (*uptr)
+							//	* nim->scl_slope + nim->scl_inter;
+							data[k][j][i] = (*uptr);
 							uptr++;
 						}
 					}

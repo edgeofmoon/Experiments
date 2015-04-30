@@ -92,6 +92,8 @@ public:
 
 	float GetScaleFromMotion(int x, int y) const;
 
+	void SetRotationMatrix(const MyMatrixf& mat);
+
 	// others
 	// rotation center
 	void SetOrigin(const MyVec3f& origin);

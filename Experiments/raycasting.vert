@@ -10,6 +10,7 @@ uniform sampler2D backFace;
 uniform sampler2D colorMap;
 
 uniform vec3 volSize;
+uniform vec3 cutCone;
 
 uniform float windowWidth;
 uniform float windowHeight;

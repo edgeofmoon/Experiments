@@ -9,6 +9,7 @@ uniform sampler2D backFace;
 uniform sampler2D colorMap;
 
 uniform vec3 volSize;
+uniform vec3 cutCone;
 
 uniform float windowWidth;
 uniform float windowHeight;
@@ -163,6 +164,8 @@ vec4 GetLightedColor(vec3 loc, vec3 pos, float density){
 	//return vec4(1,1,1,1);
 	//return vec4(abs(GetLocalGradient(loc)),1);
 
+	return vec4(vec3(density),1);
+
 	vec4 localDir = -vec4(GetLocalGradientSmooth(loc),0);
 	vec3 normal = normalize((transpose(inverse(mvMat))*localDir).xyz);
 	vec3 lightDir = vec3(0,1,0);
@@ -173,6 +176,7 @@ vec4 GetLightedColor(vec3 loc, vec3 pos, float density){
 	vec3 hv = normalize(eyeDir+lightDir);
 	float specular = 0.5*pow(clamp(dot(hv,normal),0,1),64);
 	//float specular = 0.5*pow(abs(dot(hv,normal)),16);
+	//vec4 rstColour = vec4(vec3(density),1);
 	vec4 rstColour = vec4(texture(colorMap, vec2(density, 0.5)).xyz,1);
 	//vec4 rstColour = vec4(1,1,1,1);
 	rstColour = rstColour*(ambient+diffusion);
@@ -212,10 +216,44 @@ void main() {
 	float accDistance = 0;
 	vec3 accColor = vec3(0,0,0);
 	
+	// experiment
+	bool fvisible = false;
+	bool tvisible = false;
+	for(int i = 0;i<sampeRate; i++){
+		vec3 loc = start + dir*accDistance;
+		vec3 loc2 = vec3(loc.x,loc.y,1-loc.z);
+		if(loc.x>cutCone.x && loc.y<cutCone.y && loc.z>cutCone.z){
+			tvisible = true;
+			accDistance+=step;
+			continue;
+		};
+		float density = texture(densityVol, loc2).r;
+		if(density>thresLow){
+			vec3 color = GetLightedColor(loc, fragPos+eyeDir*accDistance, density).xyz;
+			accColor = color;
+			accTransparency = 0;
+			fvisible = tvisible || fvisible;
+			break;
+		}
+		accDistance+=step;
+		if(accTransparency <= 0.01) break;
+		//if(accDistance>distance) break;
+
+	}
+	fragColour=vec4(accColor*(1-accTransparency),(1-accTransparency));
+	//fragColour=vec4(accTransparency,accTransparency,accTransparency,accTransparency);
+	vec3 dir2 = normalize(vec3(inverse(mvMat)*vec4(eyeDir,0)));
+	vec3 pos = rawPos+dir2*accDistance;
+	WriteDepth(pos);
 	
+	/*
 	// isosurface
 	for(int i = 0;i<sampeRate; i++){
 		vec3 loc = start + dir*accDistance;
+		if(loc.x>0.5 && loc.y<0.5 && loc.z>0.5){
+			accDistance+=step;
+			continue;
+		};
 		float density = texture(densityVol, loc).r;
 		if(density>thresLow){
 			vec3 color = GetLightedColor(loc, fragPos+eyeDir*accDistance, density).xyz;
@@ -232,6 +270,7 @@ void main() {
 	vec3 dir2 = normalize(vec3(inverse(mvMat)*vec4(eyeDir,0)));
 	vec3 pos = rawPos+dir2*accDistance;
 	WriteDepth(pos);
+	*/
 
 	/*
 	// density->color map

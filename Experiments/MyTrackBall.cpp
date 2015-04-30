@@ -105,6 +105,10 @@ float MyTrackBall::GetScaleFromMotion(int x, int y) const{
 	return dy/20 + 1.f;
 }
 
+void MyTrackBall::SetRotationMatrix(const MyMatrixf& mat){
+	mRotateMatrix = mat;
+}
+
 void MyTrackBall::SetOrigin(const MyVec3f& origin){
 	mOrigin = origin;
 }

@@ -102,6 +102,7 @@ public:
 	void ResetScale();
 	void Translate(const MyVec3f& offset);
 	void ScaleAdd(float dy);
+	void ScaleMultiply(float dy);
 
 protected:
 	void pointToVector(int x, int y, int width, int height, MyVec3f& v) const;

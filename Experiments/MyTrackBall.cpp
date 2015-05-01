@@ -136,6 +136,10 @@ void MyTrackBall::ScaleAdd(float dy)
 	mScaleMatrix = MyMatrixf::ScaleMatrix(mScale, mScale, mScale);
 }
 
+void MyTrackBall::ScaleMultiply(float dy){
+	mScale *= dy;
+	mScaleMatrix = MyMatrixf::ScaleMatrix(mScale, mScale, mScale);
+}
 /* functions */
 void MyTrackBall::pointToVector(int x, int y, int width, int height, MyVec3f& v) const
 {

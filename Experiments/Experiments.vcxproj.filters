@@ -141,6 +141,9 @@
     <ClCompile Include="MyTracks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MyBrainViewer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -299,6 +302,12 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="mesh.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="plane.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="plane.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

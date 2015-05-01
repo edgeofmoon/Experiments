@@ -153,6 +153,10 @@
   <ItemGroup>
     <ClCompile Include="MyBitmap.cpp" />
     <ClCompile Include="MyBoundingBox.cpp" />
+    <ClCompile Include="MyBrainViewer.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="MyGraphicsTool.cpp" />
     <ClCompile Include="MyImage.cpp" />
     <ClCompile Include="MyMathHelper.cpp" />
@@ -161,9 +165,9 @@
     <ClCompile Include="MyQuarternion.cpp" />
     <ClCompile Include="MyRayCasting.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="MyString.cpp" />
     <ClCompile Include="MyTrackBall.cpp" />
@@ -260,6 +264,8 @@
     <None Include="coord.vert" />
     <None Include="mesh.frag" />
     <None Include="mesh.vert" />
+    <None Include="plane.frag" />
+    <None Include="plane.vert" />
     <None Include="raycasting.frag" />
     <None Include="raycasting.vert" />
   </ItemGroup>

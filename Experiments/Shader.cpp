@@ -104,7 +104,7 @@ GLuint
 	}
 		
 	/* use program object */
-	glUseProgram(program);
+	//glUseProgram(program);
 
 	return program;
 }

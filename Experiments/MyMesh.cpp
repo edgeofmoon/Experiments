@@ -68,7 +68,7 @@ int MyMesh::GenPerVertexNormal(){
 		if (normal[3] != 0){
 			normal /= normal[3];
 		}
-		mNormals[i] = MyVec3f(normal[0], normal[1], normal[2]);
+		mNormals[i] = MyVec3f(normal[0], normal[1], normal[2]).normalized();
 	}
 	return 1;
 }

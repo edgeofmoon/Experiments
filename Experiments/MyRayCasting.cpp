@@ -142,6 +142,7 @@ MyVec3f calculateNormal(Point _p1, Point _p2, Point _pole){
 
 	return (p1 - p2) ^ pole;
 }
+
 void drawTracks(MyTracks* track){
 	static unsigned int displayList = -1;
 	if (!glIsList(displayList)){
@@ -863,12 +864,7 @@ void display(){
 		glPushMatrix();
 		glLoadIdentity();
 		gluLookAt(-eyesep / 2, 0, 0, -eyesep / 2, 0, -zDistance, 0, 1, 0);
-
-
-
-
-
-
+		/*
 		//////insert exp
 		glTranslatef(0, 0, -zDistance);
 		//MyGraphicsTool::LoadTrackBall(&trackBall);
@@ -880,14 +876,12 @@ void display(){
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		//return;
 		//////end exp
-		/*
+		*/
 		RenderCubeCoords();
 		RenderRay();
-		*/
 		glPopMatrix();
 	}
 
-	RenderTexture(backTexture);
 	glutSwapBuffers();
 }
 

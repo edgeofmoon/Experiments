@@ -5,7 +5,7 @@ uniform mat4x4 mvMat;
 uniform mat4x4 projMat;
 
 uniform sampler3D densityVol;
-uniform sampler3D gradVol;
+uniform sampler3D attriVol;
 uniform sampler2D backFace;
 uniform sampler2D colorMap;
 

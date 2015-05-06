@@ -24,8 +24,12 @@ int windowHeight = 768;
 float zDistance = 1000;
 
 MyTrackBall trackBall;
-RicVolume vol;
-GLuint volTex;
+RicVolume trackVol;
+GLuint trackVolTex;
+RicVolume tVol;
+GLuint tVolTex;
+RicVolume faVol;
+GLuint faVolTex;
 MyMesh mesh;
 MyTracks track;
 MyBitmap bitmap;
@@ -51,6 +55,7 @@ typedef struct{
 }frameBuffer;
 
 frameBuffer meshFbo;
+frameBuffer cubeFbo;
 int shaderProgram;
 int meshProgram;
 int cubeProgram;
@@ -59,9 +64,18 @@ int planeProgram;
 GLuint planeVertexArray;
 GLuint planeVertexBuffer, planeIndexBuffer;
 
+GLuint cubeVertexArray;
+GLuint cubeVertexBuffer, cubeIndexBuffer;
+
 int CompileShader(){
-	//shaderProgram = InitShader("raycasting.vert", "raycasting.frag", "fragColour");
-	//cubeProgram = InitShader("coord.vert", "coord.frag", "fragColour");
+	if (glIsProgram(shaderProgram)){
+		glDeleteProgram(shaderProgram);
+	}
+	shaderProgram = InitShader("raycasting.vert", "raycasting.frag", "fragColour");
+	if (glIsProgram(cubeProgram)){
+		glDeleteProgram(cubeProgram);
+	}
+	cubeProgram = InitShader("coord.vert", "coord.frag", "fragColour");
 	//meshProgram = InitShader("mesh.vert", "mesh.frag", "fragColour");
 	if (glIsProgram(planeProgram)){
 		glDeleteProgram(planeProgram);
@@ -130,7 +144,7 @@ int LoadColorMap(){
 	return 1;
 }
 
-int LoadVolumeTexture(){
+int LoadVolumeTexture(GLuint &volTex, RicVolume& vol){
 	if (glIsTexture(volTex)){
 		glDeleteTextures(1, &volTex);
 	}
@@ -138,10 +152,6 @@ int LoadVolumeTexture(){
 	glBindTexture(GL_TEXTURE_3D, volTex);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
@@ -158,9 +168,7 @@ int LoadVolumeTexture(){
 	}
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16F, vol.get_numx(), vol.get_numy(), vol.get_numz(), 0, GL_RED, GL_FLOAT, d);
 	delete[]d;
-
 	//glTexImage3D(GL_TEXTURE_3D, 0, GL_R16F, vol.get_numx(), vol.get_numy(), vol.get_numz(), 0, GL_RED, GL_FLOAT, vol.varray);
-
 	//glGenerateMipmap(GL_TEXTURE_3D);
 	glBindTexture(GL_TEXTURE_3D, 0);
 	return 1;
@@ -241,6 +249,49 @@ int LoadPlaneShaderData(){
 	return 1;
 }
 
+int LoadCubeShaderData(){
+	float vertices[8][3] = {
+		{ 0, 0, 1 }, { 1, 0, 1 },
+		{ 0, 1, 1 }, { 1, 1, 1 },
+		{ 0, 0, 0 }, { 1, 0, 0 },
+		{ 0, 1, 0 }, { 1, 1, 0 },
+	};
+	int faces[6][4] = {
+		{ 0, 1, 3, 2 },
+		{ 2, 3, 7, 6 },
+		{ 6, 7, 5, 4 },
+		{ 4, 5, 1, 0 },
+		{ 4, 0, 2, 6 },
+		{ 1, 5, 7, 3 },
+	};
+	int index[36];
+	for (int i = 0; i < 6; i++){
+		index[i * 6 + 0] = faces[i][0];
+		index[i * 6 + 1] = faces[i][1];
+		index[i * 6 + 2] = faces[i][2];
+		index[i * 6 + 3] = faces[i][0];
+		index[i * 6 + 4] = faces[i][2];
+		index[i * 6 + 5] = faces[i][3];
+	}
+	glGenVertexArrays(1, &cubeVertexArray);
+	glBindVertexArray(cubeVertexArray);
+	glGenBuffers(1, &cubeVertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, cubeVertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(float), vertices, GL_STATIC_DRAW);
+	int location = glGetAttribLocation(cubeProgram, "position");
+	glEnableVertexAttribArray(location);
+	glVertexAttribPointer(location, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glGenBuffers(1, &cubeIndexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(int), &index, GL_STATIC_DRAW);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	return 1;
+}
+
 
 void drawTracks(MyTracks* track){
 	static unsigned int displayList = -1;
@@ -264,14 +315,14 @@ void drawTracks(MyTracks* track){
 				}
 				normal.Normalize();
 				glNormal3f(normal.x, normal.y, normal.z);
-				float den = vol.get_at_index(p.x, vol.get_numy() - p.y, p.z);
+				float den = tVol.get_at_index(p.x, tVol.get_numy() - p.y, p.z);
 				MyColor4f color = bitmap.GetColor(den*(bitmap.GetWidth() - 1), 0);
-				MyGraphicsTool::Color(MyColor4f(color.b, color.g, color.r));
+				MyGraphicsTool::Color(MyColor4f(color.b, color.g, color.r, den));
 				//glColor3f(den, den, den);
 				glVertex3f(p.x, p.y, p.z);
 			}
 			glEnd();
-			if (i % 100 == 0 || i == track->GetNumTracks() - 1){
+			if (i % 1000 == 0 || i == track->GetNumTracks() - 1){
 				MyString progress(100 * i / (float)(track->GetNumTracks() - 1));
 				progress.resize(5);
 				cout << "\r" << progress << "%";
@@ -284,7 +335,7 @@ void drawTracks(MyTracks* track){
 	glTranslatef(0.5, 0.5, 0.5);
 	glScalef(1, -1, 1);
 	glTranslatef(-0.5, -0.5, -0.5);
-	glScalef(1.f / vol.get_numx(), 1.f / vol.get_numy(), 1.f / vol.get_numz());
+	glScalef(1.f / tVol.get_numx(), 1.f / tVol.get_numy(), 1.f / tVol.get_numz());
 	//glEnable(GL_LIGHTING);
 	//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 	//glEnable(GL_LIGHT0);
@@ -302,7 +353,7 @@ void drawMesh(const MyMesh& mesh){
 		glNewList(displayList, GL_COMPILE);
 		glPushMatrix();
 		glTranslatef(0.5, 0.5, 0.5);
-		glScalef(1.f / vol.get_numx(), 1.f / vol.get_numy(), 1.f / vol.get_numz());
+		glScalef(1.f / faVol.get_numx(), 1.f / faVol.get_numy(), 1.f / faVol.get_numz());
 		glBegin(GL_TRIANGLES);
 		for (int i = 0; i < mesh.GetNumTriangle(); i++){
 			MyVec3i triangle = mesh.GetTriangle(i);
@@ -407,7 +458,7 @@ void drawPlane(){
 	location = glGetUniformLocation(planeProgram, "densityVol");
 	glUniform1i(location, 0);
 	glActiveTexture(GL_TEXTURE0 + 0);
-	glBindTexture(GL_TEXTURE_3D, volTex);
+	glBindTexture(GL_TEXTURE_3D, faVolTex);
 
 	location = glGetUniformLocation(planeProgram, "meshDepthTex");
 	glUniform1i(location, 1);
@@ -432,6 +483,119 @@ void drawPlane(){
 	glUseProgram(0);
 }
 
+int RenderCubeCoords(){
+
+	glBindFramebuffer(GL_FRAMEBUFFER, cubeFbo.frameBuffer);
+	glEnable(GL_CULL_FACE);
+	MyGraphicsTool::SetBackgroundColor(MyColor4f(0.5, 0.5, 0.5, 0));
+	MyGraphicsTool::ClearFrameBuffer();
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
+
+	glCullFace(GL_FRONT);
+	glUseProgram(cubeProgram);
+	int location = glGetUniformLocation(cubeProgram, "mvMat");
+	float modelViewMat[16];
+	glGetFloatv(GL_MODELVIEW_MATRIX, modelViewMat);
+	glUniformMatrix4fv(location, 1, GL_FALSE, modelViewMat);
+
+	location = glGetUniformLocation(cubeProgram, "projMat");
+	float projMat[16];
+	glGetFloatv(GL_PROJECTION_MATRIX, projMat);
+	glUniformMatrix4fv(location, 1, GL_FALSE, projMat);
+
+	glBindVertexArray(cubeVertexArray);
+	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+	glUseProgram(0);
+
+	glDisable(GL_CULL_FACE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	return 1;
+}
+
+
+void RenderRay(){
+
+	//glBindFramebuffer(GL_FRAMEBUFFER, rayfbo);
+
+	//MyGraphicsTool::SetBackgroundColor(MyColor4f(0, 0, 0, 0));
+	//MyGraphicsTool::ClearFrameBuffer();
+	//MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glUseProgram(shaderProgram);
+	int location = glGetUniformLocation(shaderProgram, "mvMat");
+	float modelViewMat[16];
+	glGetFloatv(GL_MODELVIEW_MATRIX, modelViewMat);
+	glUniformMatrix4fv(location, 1, GL_FALSE, modelViewMat);
+
+	location = glGetUniformLocation(shaderProgram, "projMat");
+	float projMat[16];
+	glGetFloatv(GL_PROJECTION_MATRIX, projMat);
+	glUniformMatrix4fv(location, 1, GL_FALSE, projMat);
+
+	location = glGetUniformLocation(shaderProgram, "densityVol");
+	glUniform1i(location, 0);
+	glActiveTexture(GL_TEXTURE0 + 0);
+	glBindTexture(GL_TEXTURE_3D, trackVolTex);
+
+	location = glGetUniformLocation(shaderProgram, "attriVol");
+	glUniform1i(location, 1);
+	glActiveTexture(GL_TEXTURE0 + 1);
+	glBindTexture(GL_TEXTURE_3D, tVolTex);
+
+	location = glGetUniformLocation(shaderProgram, "backFace");
+	glUniform1i(location, 2);
+	glActiveTexture(GL_TEXTURE0 + 2);
+	glBindTexture(GL_TEXTURE_2D, cubeFbo.colorTexture);
+
+	location = glGetUniformLocation(shaderProgram, "colorMap");
+	glUniform1i(location, 3);
+	glActiveTexture(GL_TEXTURE0 + 3);
+	glBindTexture(GL_TEXTURE_2D, colorTex);
+
+	location = glGetUniformLocation(shaderProgram, "volSize");
+	glUniform3f(location, trackVol.get_numx(), trackVol.get_numy(), trackVol.get_numz());
+
+	location = glGetUniformLocation(shaderProgram, "cutCone");
+	glUniform3f(location, sizeHigh[0], sizeHigh[1], sizeHigh[2]);
+
+	location = glGetUniformLocation(shaderProgram, "windowWidth");
+	glUniform1f(location, windowWidth);
+
+	location = glGetUniformLocation(shaderProgram, "windowHeight");
+	glUniform1f(location, windowHeight);
+
+	location = glGetUniformLocation(shaderProgram, "decayFactor");
+	glUniform1f(location, decayFactor);
+
+	location = glGetUniformLocation(shaderProgram, "thresHigh");
+	glUniform1f(location, thresHigh);
+
+	location = glGetUniformLocation(shaderProgram, "thresLow");
+	glUniform1f(location, thresLow);
+
+	location = glGetUniformLocation(shaderProgram, "sampeRate");
+	if (isRotating){
+		glUniform1f(location, min(sampeRate, 256.f));
+	}
+	else{
+		glUniform1f(location, sampeRate);
+	}
+
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+	glBindVertexArray(cubeVertexArray);
+	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+	glDisable(GL_CULL_FACE);
+	glUseProgram(0);
+
+	glDisable(GL_BLEND);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void display(){
 
 	glClearColor(0, 0, 0, 0);
@@ -446,7 +610,6 @@ void display(){
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	//RenderTexture(meshFbo.colorTexture);
 	glPushMatrix();
 	glTranslatef(0, 0, -zDistance);
 	MyGraphicsTool::LoadTrackBall(&trackBall);
@@ -458,14 +621,22 @@ void display(){
 		glDisable(GL_CULL_FACE);
 	}
 	if (bdraw[1]){
-		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		drawMesh(mesh);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 	}
 	if (bdraw[2]){
+		glEnable(GL_ALPHA_TEST);
+		glAlphaFunc(GL_GREATER, thresLow);
 		drawTracks(&track);
+		glDisable(GL_ALPHA_TEST);
+
+	}
+	if (bdraw[3]){
+		RenderCubeCoords();
+		RenderRay();
 	}
 	glPopMatrix();
 
@@ -482,7 +653,10 @@ void reshape(int w, int h){
 	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
 	meshFbo.width = w;
 	meshFbo.height = h;
+	cubeFbo.width = w;
+	cubeFbo.height = h;
 	BuildGLBuffers(meshFbo);
+	BuildGLBuffers(cubeFbo);
 }
 
 
@@ -628,10 +802,14 @@ void key(unsigned char c, int x, int y){
 }
 
 int main(int argc, char* argv[]){
-	cout << "Loading volume ..." << endl;
+	cout << "Loading volumes ..." << endl;
 	//vol.Read("average_s1.nii");
-	vol.Read("target.nii.gz");
-	vol /= vol.max;
+	faVol.Read("target.nii.gz");
+	faVol /= faVol.max;
+	tVol.Read("average.nii");
+	tVol /= tVol.max;
+	trackVol.Read("ACR_300.nii");
+	trackVol /= trackVol.max;
 
 	cout << "Loading mesh ..." << endl;
 	int read = mesh.Read("lh.pial.obj");
@@ -642,12 +820,10 @@ int main(int argc, char* argv[]){
 	mesh.GenPerVertexNormal();
 
 	cout << "Loading tracts ..." << endl;
-	track.Read("ACR.trk");
-	//track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\ACR_10.trk");
-	//MyGraphicsTool::Init(&argc, argv);
+	//track.Read("ACR.trk");
+	track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\ACR_10.trk");
 
 	bitmap.Open("colorScale3.bmp");
-	LoadColorMap();
 
 	glutInit(&argc, argv);
 	glutInitWindowSize(1024, 768);
@@ -663,7 +839,11 @@ int main(int argc, char* argv[]){
 
 	CompileShader();
 	LoadPlaneShaderData();
-	LoadVolumeTexture();
+	LoadCubeShaderData();
+	LoadColorMap();
+	LoadVolumeTexture(faVolTex, faVol);
+	LoadVolumeTexture(tVolTex, tVol);
+	LoadVolumeTexture(trackVolTex, trackVol);
 
 	//glutFullScreen();
 

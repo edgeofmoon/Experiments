@@ -4,7 +4,7 @@ uniform mat4x4 mvMat;
 uniform mat4x4 projMat;
 
 uniform sampler3D densityVol;
-uniform sampler3D gradVol;
+uniform sampler3D attriVol;
 uniform sampler2D backFace;
 uniform sampler2D colorMap;
 
@@ -164,7 +164,9 @@ vec4 GetLightedColor(vec3 loc, vec3 pos, float density){
 	//return vec4(1,1,1,1);
 	//return vec4(abs(GetLocalGradient(loc)),1);
 
-	return vec4(vec3(density),1);
+	//return vec4(vec3(density),1);
+
+	//return vec4(texture(colorMap, vec2(density, density)).xyz,1);
 
 	vec4 localDir = -vec4(GetLocalGradientSmooth(loc),0);
 	vec3 normal = normalize((transpose(inverse(mvMat))*localDir).xyz);
@@ -218,21 +220,17 @@ void main() {
 	
 	// experiment
 	bool fvisible = false;
-	bool tvisible = false;
 	for(int i = 0;i<sampeRate; i++){
 		vec3 loc = start + dir*accDistance;
-		vec3 loc2 = vec3(loc.x,loc.y,1-loc.z);
-		if(loc.x>cutCone.x && loc.y<cutCone.y && loc.z>cutCone.z){
-			tvisible = true;
-			accDistance+=step;
-			continue;
-		};
+		vec3 loc2 = vec3(loc.x,1-loc.y,loc.z);
 		float density = texture(densityVol, loc2).r;
+		float attri = texture(attriVol, loc).r;
 		if(density>thresLow){
-			vec3 color = GetLightedColor(loc, fragPos+eyeDir*accDistance, density).xyz;
+			//vec3 color = GetLightedColor(loc, fragPos+eyeDir*accDistance, density).xyz;
+			vec3 color = GetLightedColor(loc2, fragPos+eyeDir*accDistance, attri).xyz;
 			accColor = color;
 			accTransparency = 0;
-			fvisible = tvisible || fvisible;
+			fvisible = true;
 			break;
 		}
 		accDistance+=step;
@@ -240,10 +238,13 @@ void main() {
 		//if(accDistance>distance) break;
 
 	}
-	fragColour=vec4(accColor*(1-accTransparency),(1-accTransparency));
-	//fragColour=vec4(accTransparency,accTransparency,accTransparency,accTransparency);
 	vec3 dir2 = normalize(vec3(inverse(mvMat)*vec4(eyeDir,0)));
 	vec3 pos = rawPos+dir2*accDistance;
+	if(pos.x<cutCone.x || pos.y<cutCone.y || pos.z<cutCone.z || !fvisible){
+		discard;
+	}
+	fragColour=vec4(accColor*(1-accTransparency),(1-accTransparency));
+	//fragColour=vec4(accTransparency,accTransparency,accTransparency,accTransparency);
 	WriteDepth(pos);
 	
 	/*

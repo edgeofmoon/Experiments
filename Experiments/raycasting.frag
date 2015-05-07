@@ -151,8 +151,8 @@ vec3 InterpolateGradientXYZ(sampler3D vol, vec3 loc){
 vec3 GetLocalGradientSmooth(vec3 loc){
 
 	//vec3 g0 = InterpolateGradientXYZ(densityVol, loc);
-	//vec3 g0 = GetLocalGradient(densityVol, loc);
-	vec3 g0 = EvaluateNormal(densityVol, loc);
+	vec3 g0 = GetLocalGradient(densityVol, loc);
+	//vec3 g0 = EvaluateNormal(densityVol, loc);
 	//vec3 g0 = texture(gradVol, loc).xyz;
 	return g0;
 }
@@ -224,8 +224,8 @@ void main() {
 		vec3 loc = start + dir*accDistance;
 		vec3 loc2 = vec3(loc.x,1-loc.y,loc.z);
 		float density = texture(densityVol, loc2).r;
-		float attri = texture(attriVol, loc).r;
-		if(density>thresLow){
+		float attri = texture(attriVol, loc2).r;
+		if(density>thresLow && attri>0.5){
 			//vec3 color = GetLightedColor(loc, fragPos+eyeDir*accDistance, density).xyz;
 			vec3 color = GetLightedColor(loc2, fragPos+eyeDir*accDistance, attri).xyz;
 			accColor = color;

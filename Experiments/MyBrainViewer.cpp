@@ -7,6 +7,7 @@ using namespace std;
 
 #include "MyTrackBall.h"
 #include "MyGraphicsTool.h"
+#include "MyPrimitiveDrawer.h"
 #include "MyBitmap.h"
 #include "MyMesh.h"
 #include "MyTracts.h"
@@ -28,6 +29,7 @@ RicVolume trackVol;
 GLuint trackVolTex;
 RicVolume tVol;
 GLuint tVolTex;
+float tmin, tmax;
 RicVolume faVol;
 GLuint faVolTex;
 MyMesh mesh;
@@ -152,6 +154,8 @@ int LoadVolumeTexture(GLuint &volTex, RicVolume& vol){
 	glBindTexture(GL_TEXTURE_3D, volTex);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
@@ -315,8 +319,10 @@ void drawTracks(MyTracks* track){
 				}
 				normal.Normalize();
 				glNormal3f(normal.x, normal.y, normal.z);
-				float den = tVol.get_at_index(p.x, tVol.get_numy() - p.y, p.z);
-				MyColor4f color = bitmap.GetColor(den*(bitmap.GetWidth() - 1), 0);
+				float tScore = tVol.get_at_index(p.x + 0.5f, tVol.get_numy() - p.y - 1.5f, p.z + 0.5f);
+				if (tScore < 0.1) continue;
+				MyColor4f color = bitmap.GetColor(tScore*(bitmap.GetWidth() - 1), 0);
+				float den = trackVol.get_at_index(p.x + 0.5f, tVol.get_numy() - p.y - 1.5f, p.z + 0.5f);
 				MyGraphicsTool::Color(MyColor4f(color.b, color.g, color.r, den));
 				//glColor3f(den, den, den);
 				glVertex3f(p.x, p.y, p.z);
@@ -410,14 +416,11 @@ void drawMesh(const MyMesh& mesh){
 }
 
 void RenderTexture(int texture){
-
 	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
-
 	MyGraphicsTool::PushProjectionMatrix();
 	MyGraphicsTool::PushMatrix();
 	MyGraphicsTool::LoadProjectionMatrix(&MyMatrixf::OrthographicMatrix(-1, 1, -1, 1, 1, 10));
 	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
-
 	MyGraphicsTool::EnableTexture2D();
 	MyGraphicsTool::BindTexture2D(texture);
 	MyGraphicsTool::BeginTriangleFan();
@@ -436,7 +439,63 @@ void RenderTexture(int texture){
 	MyGraphicsTool::EndPrimitive();
 	MyGraphicsTool::BindTexture2D(0);
 	MyGraphicsTool::DisableTexture2D();
+	MyGraphicsTool::PopMatrix();
+	MyGraphicsTool::PopProjectionMatrix();
+}
 
+void RenderTexture(int texture, MyVec2f lowPos, MyVec2f highPos){
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
+	MyGraphicsTool::PushProjectionMatrix();
+	MyGraphicsTool::PushMatrix();
+	MyGraphicsTool::LoadProjectionMatrix(&MyMatrixf::OrthographicMatrix(-1, 1, -1, 1, 1, 10));
+	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
+	MyGraphicsTool::EnableTexture2D();
+	MyGraphicsTool::BindTexture2D(texture);
+	MyGraphicsTool::BeginTriangleFan();
+	MyGraphicsTool::TextureCoordinate(MyVec2f(0, 0));
+	MyGraphicsTool::Color(MyColor4f(1, 1, 1));
+	MyGraphicsTool::Vertex(MyVec3f(lowPos[0], lowPos[1], -5));
+	MyGraphicsTool::TextureCoordinate(MyVec2f(1, 0));
+	//MyGraphicsTool::Color(MyColor4f(1, 0, 0));
+	MyGraphicsTool::Vertex(MyVec3f(highPos[0], lowPos[1], -5));
+	MyGraphicsTool::TextureCoordinate(MyVec2f(1, 1));
+	//MyGraphicsTool::Color(MyColor4f(1, 1, 0));
+	MyGraphicsTool::Vertex(MyVec3f(highPos[0], highPos[1], -5));
+	MyGraphicsTool::TextureCoordinate(MyVec2f(0, 1));
+	//MyGraphicsTool::Color(MyColor4f(0, 1, 0));
+	MyGraphicsTool::Vertex(MyVec3f(lowPos[0], highPos[1], -5));
+	MyGraphicsTool::EndPrimitive();
+	MyGraphicsTool::BindTexture2D(0);
+	MyGraphicsTool::DisableTexture2D();
+
+	MyString lowValue(tmin);
+	MyString highValue(tmax);
+	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(lowPos[0], highPos[1], -5), lowValue, 1);
+	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], highPos[1], -5), highValue, 1);
+	MyGraphicsTool::PopMatrix();
+	MyGraphicsTool::PopProjectionMatrix();
+}
+
+void RenderLegend(MyVec2f lowPos, MyVec2f highPos){
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
+	MyGraphicsTool::PushProjectionMatrix();
+	MyGraphicsTool::PushMatrix();
+	MyGraphicsTool::LoadProjectionMatrix(&MyMatrixf::OrthographicMatrix(-1, 1, -1, 1, 1, 10));
+	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
+	float step = (highPos[0]-lowPos[0]) / (bitmap.GetWidth()-1);
+	MyGraphicsTool::BeginQuadStrip();
+	for (int i = 0; i < bitmap.GetWidth(); i++){
+		MyGraphicsTool::Color(bitmap.GetColor(i, 0));
+		MyGraphicsTool::Vertex(MyVec3f(lowPos[0] + step*i, lowPos[1], -5));
+		MyGraphicsTool::Color(bitmap.GetColor(i, 1));
+		MyGraphicsTool::Vertex(MyVec3f(lowPos[0] + step*i, highPos[1], -5));
+	}
+	MyGraphicsTool::EndPrimitive();
+
+	MyString lowValue(tmin);
+	MyString highValue(tmax);
+	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(lowPos[0], highPos[1], -5), lowValue, 1);
+	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], highPos[1], -5), highValue, 1);
 	MyGraphicsTool::PopMatrix();
 	MyGraphicsTool::PopProjectionMatrix();
 }
@@ -599,22 +658,17 @@ void RenderRay(){
 void display(){
 
 	glClearColor(0, 0, 0, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, meshFbo.frameBuffer);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glPushMatrix();
-	glTranslatef(0, 0, -zDistance);
-	MyGraphicsTool::LoadTrackBall(&trackBall);
-	glTranslatef(-0.5, -0.5, -0.5);
-	drawMesh(mesh);
-	glPopMatrix();
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glPushMatrix();
 	glTranslatef(0, 0, -zDistance);
 	MyGraphicsTool::LoadTrackBall(&trackBall);
 	glTranslatef(-0.5, -0.5, -0.5);
 	if (bdraw[0]){
+		glBindFramebuffer(GL_FRAMEBUFFER, meshFbo.frameBuffer);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		drawMesh(mesh);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
 		drawPlane();
@@ -628,16 +682,17 @@ void display(){
 		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 	}
 	if (bdraw[2]){
-		glEnable(GL_ALPHA_TEST);
-		glAlphaFunc(GL_GREATER, thresLow);
+		//glEnable(GL_ALPHA_TEST);
+		//glAlphaFunc(GL_GREATER, thresLow);
 		drawTracks(&track);
-		glDisable(GL_ALPHA_TEST);
+		//glDisable(GL_ALPHA_TEST);
 
 	}
 	if (bdraw[3]){
 		RenderCubeCoords();
 		RenderRay();
 	}
+	RenderLegend(MyVec2f(-0.8, -1.f), MyVec2f(0.8, -0.9f));
 	glPopMatrix();
 
 	glutSwapBuffers();
@@ -807,6 +862,8 @@ int main(int argc, char* argv[]){
 	faVol.Read("target.nii.gz");
 	faVol /= faVol.max;
 	tVol.Read("average.nii");
+	tmin = tVol.min;
+	tmax = tVol.max;
 	tVol /= tVol.max;
 	trackVol.Read("ACR_300.nii");
 	trackVol /= trackVol.max;

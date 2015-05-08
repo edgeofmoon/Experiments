@@ -69,20 +69,30 @@ GLuint planeVertexBuffer, planeIndexBuffer;
 GLuint cubeVertexArray;
 GLuint cubeVertexBuffer, cubeIndexBuffer;
 
+GLuint meshVertexArray;
+GLuint meshVertexBuffer, meshNormalBuffer, meshIndexBuffer;
+
 int CompileShader(){
 	if (glIsProgram(shaderProgram)){
 		glDeleteProgram(shaderProgram);
 	}
 	shaderProgram = InitShader("raycasting.vert", "raycasting.frag", "fragColour");
+
 	if (glIsProgram(cubeProgram)){
 		glDeleteProgram(cubeProgram);
 	}
 	cubeProgram = InitShader("coord.vert", "coord.frag", "fragColour");
-	//meshProgram = InitShader("mesh.vert", "mesh.frag", "fragColour");
+
+	if (glIsProgram(meshProgram)){
+		glDeleteProgram(meshProgram);
+	}
+	meshProgram = InitShader("mesh.vert", "mesh.frag", "fragColour");
+
 	if (glIsProgram(planeProgram)){
 		glDeleteProgram(planeProgram);
 	}
 	planeProgram = InitShader("plane.vert", "plane.frag", "fragColour");
+
 	return 1;
 }
 
@@ -296,6 +306,33 @@ int LoadCubeShaderData(){
 	return 1;
 }
 
+int LoadMeshShaderData(){
+	glGenVertexArrays(1, &meshVertexArray);
+	glBindVertexArray(meshVertexArray);
+	// vertices
+	glGenBuffers(1, &meshVertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, meshVertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, mesh.GetNumVertex() * sizeof(MyVec3f), mesh.GetVertexData(), GL_STATIC_DRAW);
+	int location = glGetAttribLocation(meshProgram, "position");
+	glEnableVertexAttribArray(location);
+	glVertexAttribPointer(location, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	// normals
+	glGenBuffers(1, &meshNormalBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, meshNormalBuffer);
+	glBufferData(GL_ARRAY_BUFFER, mesh.GetNumNormal() * sizeof(MyVec3f), mesh.GetNormalData(), GL_STATIC_DRAW);
+	location = glGetAttribLocation(meshProgram, "normal");
+	glEnableVertexAttribArray(location);
+	glVertexAttribPointer(location, 3, GL_FLOAT, GL_TRUE, 0, 0);
+	//index
+	glGenBuffers(1, &meshIndexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshIndexBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.GetNumTriangle() * sizeof(MyVec3i), mesh.GetTriangleData(), GL_STATIC_DRAW);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	return 1;
+	return 1;
+}
 
 void drawTracks(MyTracks* track){
 	static unsigned int displayList = -1;
@@ -350,8 +387,33 @@ void drawTracks(MyTracks* track){
 	glPopMatrix();
 }
 
-void drawMesh(const MyMesh& mesh){
+void drawMeshGlass(const MyMesh& mesh){
+	glPushMatrix();
+	glTranslatef(0.5, 0.5, 0.5);
+	glScalef(1.f / faVol.get_numx(), 1.f / faVol.get_numy(), 1.f / faVol.get_numz());
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+	glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
+	glUseProgram(meshProgram);
+	int location = glGetUniformLocation(meshProgram, "mvMat");
+	float modelViewMat[16];
+	glGetFloatv(GL_MODELVIEW_MATRIX, modelViewMat);
+	glUniformMatrix4fv(location, 1, GL_FALSE, modelViewMat);
+	location = glGetUniformLocation(meshProgram, "projMat");
+	float projMat[16];
+	glGetFloatv(GL_PROJECTION_MATRIX, projMat);
+	glUniformMatrix4fv(location, 1, GL_FALSE, projMat);
+	glBindVertexArray(meshVertexArray);
+	glDrawElements(GL_TRIANGLES, mesh.GetNumTriangle() * 3, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+	glUseProgram(0);
+	glDisable(GL_CULL_FACE);
+	glPopMatrix();
+	glDisable(GL_BLEND);
+}
 
+void drawMeshSolid(const MyMesh& mesh){
 	static int displayList = -1;
 	if (!glIsList(displayList)){
 		//MyBoundingBox box = mesh.GetBoundingBox();
@@ -370,15 +432,6 @@ void drawMesh(const MyMesh& mesh){
 			MyGraphicsTool::Vertex(mesh.GetVertex(triangle[1]));
 			MyGraphicsTool::Normal(mesh.GetNormal(triangle[2]));
 			MyGraphicsTool::Vertex(mesh.GetVertex(triangle[2]));
-
-			/*
-			MyVec3f normal = mesh.ComputeTriangleNormal(i).normalized();
-			MyGraphicsTool::Normal(normal);
-			MyGraphicsTool::Vertex(mesh.GetVertex(triangle[0]));
-			MyGraphicsTool::Vertex(mesh.GetVertex(triangle[1]));
-			MyGraphicsTool::Vertex(mesh.GetVertex(triangle[2]));
-			*/
-			
 		}
 		glEnd();
 		glPopMatrix();
@@ -476,7 +529,7 @@ void RenderTexture(int texture, MyVec2f lowPos, MyVec2f highPos){
 	MyGraphicsTool::PopProjectionMatrix();
 }
 
-void RenderLegend(MyVec2f lowPos, MyVec2f highPos){
+void RenderLegend(MyVec2f lowPos, MyVec2f highPos, float lowValue, float highValue){
 	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
 	MyGraphicsTool::PushProjectionMatrix();
 	MyGraphicsTool::PushMatrix();
@@ -492,10 +545,10 @@ void RenderLegend(MyVec2f lowPos, MyVec2f highPos){
 	}
 	MyGraphicsTool::EndPrimitive();
 
-	MyString lowValue(tmin);
-	MyString highValue(tmax);
-	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(lowPos[0], highPos[1], -5), lowValue, 1);
-	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], highPos[1], -5), highValue, 1);
+	MyString lowValueStr(lowValue);
+	MyString highValueStr(highValue);
+	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(lowPos[0], highPos[1], -5), lowValueStr, 1);
+	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], highPos[1], -5), highValueStr, 1);
 	MyGraphicsTool::PopMatrix();
 	MyGraphicsTool::PopProjectionMatrix();
 }
@@ -528,6 +581,11 @@ void drawPlane(){
 	glUniform1i(location, 2);
 	glActiveTexture(GL_TEXTURE0 + 2);
 	glBindTexture(GL_TEXTURE_2D, meshFbo.colorTexture);
+
+	location = glGetUniformLocation(planeProgram, "colorMap");
+	glUniform1i(location, 3);
+	glActiveTexture(GL_TEXTURE0 + 3);
+	glBindTexture(GL_TEXTURE_2D, colorTex);
 
 	location = glGetUniformLocation(planeProgram, "windowWidth");
 	glUniform1f(location, meshFbo.width);
@@ -667,19 +725,12 @@ void display(){
 	if (bdraw[0]){
 		glBindFramebuffer(GL_FRAMEBUFFER, meshFbo.frameBuffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		drawMesh(mesh);
+		drawMeshSolid(mesh);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
 		drawPlane();
 		glDisable(GL_CULL_FACE);
-	}
-	if (bdraw[1]){
-		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		drawMesh(mesh);
-		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 	}
 	if (bdraw[2]){
 		//glEnable(GL_ALPHA_TEST);
@@ -692,7 +743,14 @@ void display(){
 		RenderCubeCoords();
 		RenderRay();
 	}
-	RenderLegend(MyVec2f(-0.8, -1.f), MyVec2f(0.8, -0.9f));
+	if (bdraw[1]){
+		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		drawMeshGlass(mesh);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+	}
+	RenderLegend(MyVec2f(-0.8, -1.f), MyVec2f(0.8, -0.9f), tmin, tmax);
 	glPopMatrix();
 
 	glutSwapBuffers();
@@ -759,13 +817,18 @@ void key(unsigned char c, int x, int y){
 		glutPostRedisplay();
 		break;
 	case '%':
-		// posterior
+		// anterior
 		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(90, 1, 0, 0));
 		glutPostRedisplay();
 		break;
 	case '^':
-		// anterior
+		// posterior
 		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(180, 0, 0, 1)*MyMatrixf::RotateMatrix(-90, 1, 0, 0));
+		glutPostRedisplay();
+		break;
+	case '&':
+		// custom
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(45, -1, 1, 0)*MyMatrixf::RotateMatrix(90, 0, 0, 1)*MyMatrixf::RotateMatrix(90, 0, 1, 0));
 		glutPostRedisplay();
 		break;
 	case '1':
@@ -857,6 +920,7 @@ void key(unsigned char c, int x, int y){
 }
 
 int main(int argc, char* argv[]){
+	
 	cout << "Loading volumes ..." << endl;
 	//vol.Read("average_s1.nii");
 	faVol.Read("target.nii.gz");
@@ -897,6 +961,7 @@ int main(int argc, char* argv[]){
 	CompileShader();
 	LoadPlaneShaderData();
 	LoadCubeShaderData();
+	LoadMeshShaderData();
 	LoadColorMap();
 	LoadVolumeTexture(faVolTex, faVol);
 	LoadVolumeTexture(tVolTex, tVol);

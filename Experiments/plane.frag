@@ -7,6 +7,7 @@ uniform mat4x4 projMat;
 uniform sampler3D densityVol;
 uniform sampler2D meshDepthTex;
 uniform sampler2D meshColorTex;
+uniform sampler2D colorMap;
 
 uniform float windowWidth;
 uniform float windowHeight;
@@ -23,7 +24,8 @@ void main() {
 	//fragColour = vec4(value,value,value,1);
 	//fragColour = meshColor;
 	if(meshDepth<0.98 && meshColor.r<0.05){
-		fragColour = vec4(value,value,value,1);
+		//fragColour = vec4(value,value,value,1);
+		fragColour = texture(colorMap, vec2(value,0.5));
 	}
 	else{
 		discard;

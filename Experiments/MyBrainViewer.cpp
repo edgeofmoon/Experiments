@@ -16,6 +16,9 @@ using namespace std;
 #include "Ric/RicVolume.h"
 #include "Ric/RicMesh.h"
 
+#include "CT_MSC.h"
+#include "Helper.h"
+
 bool bStereo = false;
 // 0: middle, 1: left, 2:right
 int eyeIfNonStereo = 0;
@@ -43,7 +46,7 @@ float decayFactor = 1000;
 float thresHigh = 1.0;
 float thresLow = 0.1;
 float sampeRate = 512.f;
-bool bdraw[4] = { false, true, false, false };
+bool bdraw[4] = { false, false, false, false };
 MyVec3f sizeLow(0, 0, 0);
 MyVec3f sizeHigh(0.5, 0.5, 0.5);
 int sizePosIdx = 2;
@@ -187,6 +190,234 @@ int LoadVolumeTexture(GLuint &volTex, RicVolume& vol){
 	glBindTexture(GL_TEXTURE_3D, 0);
 	return 1;
 }
+
+
+ContourTreeNode * ContTree;
+JoinSplitTreeNode* JoinTree;
+JoinSplitTreeNode * SplitTree;
+MorseSmaleCriticalPoint* MSCpoint;
+vector<vector<int>> PairQ;
+vector<vector<vector<int>>> MSCsep;
+vector<vector<int>> MSCsepD;
+vector<vector<int>> pairs;
+vector<int> recurid;
+float fMin, fMax;
+int MSCriNum;
+bool flag = false;
+bool is_3D = true;
+vector < vector <int> > DisplayNodePosition;//for tree-shape display
+vector< vector <float> > TrueNodeposition;
+vector < vector < vector <int> > > BrancheBox;
+float **seeds, **iseeds;
+int branchNum;
+char * edgeCoordinator;
+char * edgeActor;
+int Width, Height, Center;
+vector < vector <int> >  locationArray, branchLocationArray;
+vector< vector < vector <int> > > BranchSep;
+
+void BuildContourTree(){
+	RicVolume downSampledTVol;
+	downSampledTVol.Read("ACR_300_sub2_sub2.nii.gz");
+	downSampledTVol /= downSampledTVol.max;
+	CT(ContTree, JoinTree, SplitTree, MSCpoint, PairQ,
+		MSCsep, MSCsepD, pairs, recurid,
+		downSampledTVol.vox, fMin, fMax, MSCriNum,
+		downSampledTVol.get_numx(), downSampledTVol.get_numy(), downSampledTVol.get_numz(),
+		flag, is_3D);
+	branchNum = PairQ.size();
+	seeds = f2vector(branchNum, 4);
+	iseeds = f2vector(branchNum, 4);
+	DisplayNodePosition = ReDrawHierarchyContTree_2(ContTree, MSCpoint, MSCriNum, MSCsep, MSCsepD,
+		branchNum, pairs, recurid, PairQ, Width, Height, Center, locationArray, branchLocationArray,
+		downSampledTVol.vox, fMin, fMax, seeds, BrancheBox, BranchSep);
+	int seedNum = branchNum;
+	TrueNodeposition = TruePosition(DisplayNodePosition, MSCriNum, Width, Height, Center);
+
+	edgeCoordinator = new char[MSCriNum];
+	edgeActor = new char[branchNum];
+
+	for (int i = 0; i<branchNum; i++)
+		edgeActor[i] = 0;
+
+	for (int i = 0; i<MSCriNum; i++)
+		edgeCoordinator[i] = 0;
+}
+
+void DrawContourTree(){
+	//int ** NodePosition=app->GUIDataManager()->NodePosition;
+	vector< vector <float> > NodePosition = TrueNodeposition;
+	//vector< vector<int> > NodePosition = NodePosition;
+
+	float x0, y0, x1, y1;
+	int count;
+
+	//if(PairQ.size()<1)
+	//     return;
+	if (branchNum <= 0)
+		return;
+
+	/*x0=NodePosition[PairQ[0][0]][0]+center;
+	//fprintf(fp,"x0%d,",x0);
+
+
+	y0=NodePosition[PairQ[0][0]][1];
+
+	x1=NodePosition[PairQ[0][1]][0]+center;
+	y1=NodePosition[PairQ[0][1]][1];*/
+
+	for (int i = 0; i<branchNum; i++)
+	{
+		edgeCoordinator[PairQ[i][0]] = edgeCoordinator[PairQ[i][1]] = 0;
+	}
+
+	int KK = branchNum>100 ? 100 : branchNum;
+	if (KK>0)
+	{
+		//glColor3f(0.0, 0.0, 0.0);
+		glColor3f(1.0, 1.0, 1.0);
+		glBegin(GL_LINES);
+
+		//glVertex2f(x0*scale_x-dx, y0*scale_y-dy);
+		//glVertex2f(x1*scale_x-dx, y0*scale_y-dy);
+
+		glVertex2f(NodePosition[PairQ[0][0]][0], NodePosition[PairQ[0][0]][1] + 0.05);
+		glVertex2f(NodePosition[PairQ[0][1]][0], NodePosition[PairQ[0][0]][1] + 0.05);
+
+		//glVertex2f(x1*scale_x-dx, y0*scale_y-dy);
+		//glVertex2f(x1*scale_x-dx, y1*scale_y-dy);
+
+		glVertex2f(NodePosition[PairQ[0][1]][0], NodePosition[PairQ[0][0]][1] + 0.05);
+		glVertex2f(NodePosition[PairQ[0][1]][0], NodePosition[PairQ[0][1]][1] + 0.05);
+
+		glEnd();
+
+		glPointSize(3);
+		glEnable(GL_POINT_SMOOTH);
+		glBegin(GL_POINTS);
+		glColor3f(0.0, 1.0, 0.0);
+		//glVertex2f(x0*scale_x-dx, y0*scale_y-dy);
+		glVertex2f(NodePosition[PairQ[0][0]][0], NodePosition[PairQ[0][0]][1] + 0.05);
+
+		glColor3f(0.0, 0.0, 1.0);
+		//glVertex2f(x1*scale_x-dx, y1*scale_y-dy);
+		glVertex2f(NodePosition[PairQ[0][1]][0], NodePosition[PairQ[0][1]][1] + 0.05);
+		glEnd();
+		edgeCoordinator[PairQ[0][0]] = edgeCoordinator[PairQ[0][1]] = 1;
+	}
+
+	//count=app->GUIDataManager()->branchNum;
+	//fprintf(fp,"count=%d\n",count);
+
+	for (int i = 1; i<KK; i++)
+		//for(vector< vector <int> >::iterator it=++PairQ.begin(); it!=PairQ.end(); it++)
+	{
+		//vector <int> point=*it;
+		int point0, point1, point3;
+		point0 = PairQ[i][0];
+		point1 = PairQ[i][1];
+		//point[2]=PairQ[i][2];
+		point3 = PairQ[i][3];
+
+		x0 = NodePosition[point0][0], y0 = NodePosition[point0][1];
+		x1 = NodePosition[point1][0], y1 = NodePosition[point1][1];
+
+		//fprintf(fp,"%f,%f,%f,%f\n",x0,y0,x1,y1);
+
+
+		//app->GUIDataManager()->edgeCoordinator[point0]=app->GUIDataManager()->edgeCoordinator[point1]=0;
+
+		//if(ContTree[PairQ[point[3]][1]].Pro[0]==0)
+		if (ContTree[PairQ[point3][1]].Pro[0] == 0)
+		{
+			ContTree[point1].Pro[0] = 0;
+		}
+		else ContTree[point1].Pro[0] = 1;
+
+		if (ContTree[point0].Pro[0] == 2 && ContTree[point1].Pro[0] == 1)
+		{
+			ContTree[point1].Pro[0] = 0;
+
+			//x0=NodePosition[point0][0]+center;
+			//y0=NodePosition[point0][1];
+
+
+			glPointSize(6);
+			glDisable(GL_POINT_SMOOTH);
+			glColor3f(0.0, 0.0, 0.0);
+			glBegin(GL_POINTS);
+			//glVertex2f(x0*scale_x-dx-0.001, y0*scale_y-dy);
+			glVertex2f(x0, y0 + 0.05);
+			glEnd();
+
+			glPointSize(4);
+			glColor3f(1.0, 0.0, 0.0);
+			glBegin(GL_POINTS);
+			//glVertex2f(x0*scale_x-dx-0.001, y0*scale_y-dy);
+			glVertex2f(x0, y0 + 0.05);
+			glEnd();
+
+			//glColor3f(0.0, 0.0, 0.0);
+			glColor3f(1.0, 1.0, 1.0);
+			glBegin(GL_LINES);
+			//glVertex2f(x0*scale_x-dx-0.006, y0*scale_y-dy);
+			//glVertex2f(x0*scale_x-dx+0.006, y0*scale_y-dy);
+			glVertex2f(x0 - 0.006, y0 + 0.05);
+			glVertex2f(x0 + 0.006, y0 + 0.05);
+			glVertex2f(x0, y0 + 0.08);
+			glVertex2f(x0, y0 + 0.02);
+
+			//glVertex2f(x0*scale_x-dx, y0*scale_y-dy+0.03);
+			//glVertex2f(x0*scale_x-dx, y0*scale_y-dy-0.03);
+			glEnd();
+
+		}
+		else if (ContTree[point1].Pro[0] == 1)
+		{
+			//x0=x0+center;
+			//y0=y0;
+
+			//x1=x1+center;
+			//y1=y1;
+
+			edgeCoordinator[point0] = edgeCoordinator[point1] = 1;
+
+			//glColor3f(0.0, 0.0, 0.0);
+			glColor3f(1.0, 1.0, 1.0);
+			glBegin(GL_LINES);
+
+			//glVertex2f(x0*scale_x-dx, y0*scale_y-dy);
+			glVertex2f(x0, y0 + 0.05);
+			//glVertex2f(x1*scale_x-dx, y0*scale_y-dy);
+			glVertex2f(x1, y0 + 0.05);
+
+			//glVertex2f(x1*scale_x-dx, y0*scale_y-dy);
+			glVertex2f(x1, y0 + 0.05);
+			//glVertex2f(x1*scale_x-dx, y1*scale_y-dy);
+			glVertex2f(x1, y1 + 0.05);
+			glEnd();
+
+
+			glColor3f(1.0, 0.0, 0.0);
+			glPointSize(3);
+
+			glDisable(GL_POINT_SMOOTH);
+			glBegin(GL_POINTS);
+			//glVertex2f(x0*scale_x-dx, y0*scale_y-dy);
+			glVertex2f(x0, y0 + 0.05);
+			glEnd();
+
+			glEnable(GL_POINT_SMOOTH);
+			glBegin(GL_POINTS);
+			if (MSCpoint[point1].type == 1)
+				glColor3f(0.0, 0.0, 1.0);
+			else glColor3f(0.0, 1.0, 0.0);
+			glVertex2f(x1, y1 + 0.05); //glVertex2f(x1*scale_x-dx, y1*scale_y-dy);
+			glEnd();
+		}
+	}
+}
+
 
 void updateShaderData(){
 	float size = 1;
@@ -373,6 +604,84 @@ void drawTracks(MyTracks* track){
 		}
 		glEndList();
 		cout << "Complete." << endl;
+	}
+	glPushMatrix();
+	glTranslatef(0.5, 0.5, 0.5);
+	glScalef(1, -1, 1);
+	glTranslatef(-0.5, -0.5, -0.5);
+	glScalef(1.f / tVol.get_numx(), 1.f / tVol.get_numy(), 1.f / tVol.get_numz());
+	//glEnable(GL_LIGHTING);
+	//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+	//glEnable(GL_LIGHT0);
+	glCallList(displayList);
+	//glDisable(GL_LIGHTING);
+	glPopMatrix();
+}
+
+void drawTracksFA(){
+	static unsigned int displayList = -1;
+	if (!glIsList(displayList)){
+		MyTracks trackdata;
+		trackdata.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\dti.trk");
+		MyTracks* track = &trackdata;
+		RicVolume FaVol;
+		FaVol.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\dti_fa.nii.gz");
+		cout << "Building track display list " << endl;
+		displayList = glGenLists(1);
+		glNewList(displayList, GL_COMPILE);
+		int numTracksDisplayed = 0;
+		ofstream faoutfile("fa.txt");
+		faoutfile << 8966 << endl;
+		for (int i = 0; i < track->GetNumTracks(); i++){
+			if (rand() % 100 < 97) continue;
+			float length = 0;
+			Point lastP = track->GetPoint(i, 0);
+			for (int j = 1; j < track->GetNumVertex(i); j++){
+				Point thisP = track->GetPoint(i, j);
+				length += thisP.Distance(lastP);
+				lastP = thisP;
+			}
+			if (length < 60) continue;
+
+			Point pole = track->GetPoint(i, track->GetNumVertex(i) - 1)
+				- track->GetPoint(i, 0);
+			glBegin(GL_LINE_STRIP);
+			numTracksDisplayed++;
+			faoutfile << track->GetNumVertex(i) << endl;
+			for (int j = 0; j < track->GetNumVertex(i); j++){
+				Point p = track->GetPoint(i, j);
+				Point normal;
+				if (j == 0){
+					normal = (p - track->GetPoint(i, j + 1)).CrossProduct(pole);
+				}
+				else{
+					normal = (track->GetPoint(i, j - 1) - p).CrossProduct(pole);
+				}
+				normal.Normalize();
+				glNormal3f(normal.x, normal.y, normal.z);
+				float Fa = FaVol.get_at_index(p.x + 0.5f, FaVol.get_numy() - p.y - 1.5f, p.z + 0.5f);
+				faoutfile << Fa << endl;
+				float den = length / 100;
+				//MyColor4f color(1 - Fa, 1 - Fa, 1);
+				MyColor4f color(Fa, Fa, 1);
+				//MyColor4f color = bitmap.GetColor(Fa*(bitmap.GetWidth() - 1), 0);
+				MyGraphicsTool::Color(MyColor4f(color.r, color.g, color.b, den));
+				//MyGraphicsTool::Color(MyColor4f(color.b, color.g, color.r, den));
+				//glColor3f(den, den, den);
+				glVertex3f(p.x, p.y, p.z);
+
+				faoutfile << p.x << ' ' << p.y << ' ' << p.z << ' ' << Fa << ' ' << Fa << ' ' << 1 << endl;
+			}
+			glEnd();
+			if (i % 1000 == 0 || i == track->GetNumTracks() - 1){
+				MyString progress(100 * i / (float)(track->GetNumTracks() - 1));
+				progress.resize(5);
+				cout << "\r" << progress << "%";
+			}
+		}
+		glEndList();
+		faoutfile.close();
+		cout << "\rCompleted with " << numTracksDisplayed << " trackts drawn." << endl;
 	}
 	glPushMatrix();
 	glTranslatef(0.5, 0.5, 0.5);
@@ -715,6 +1024,7 @@ void RenderRay(){
 
 void display(){
 
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -733,10 +1043,11 @@ void display(){
 		glDisable(GL_CULL_FACE);
 	}
 	if (bdraw[2]){
-		//glEnable(GL_ALPHA_TEST);
-		//glAlphaFunc(GL_GREATER, thresLow);
+		glEnable(GL_ALPHA_TEST);
+		glAlphaFunc(GL_GREATER, thresLow);
 		drawTracks(&track);
-		//glDisable(GL_ALPHA_TEST);
+		//drawTracksFA();
+		glDisable(GL_ALPHA_TEST);
 
 	}
 	if (bdraw[3]){
@@ -746,11 +1057,23 @@ void display(){
 	if (bdraw[1]){
 		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		drawMeshGlass(mesh);
+		//drawMeshGlass(mesh);
+		drawMeshSolid(mesh);
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 	}
-	RenderLegend(MyVec2f(-0.8, -1.f), MyVec2f(0.8, -0.9f), tmin, tmax);
+
+	MyGraphicsTool::SetViewport(MyVec4i(windowWidth/2, 0, windowWidth/2, windowHeight/2));
+	MyGraphicsTool::PushProjectionMatrix();
+	MyGraphicsTool::PushMatrix();
+	MyGraphicsTool::LoadProjectionMatrix(&MyMatrixf::OrthographicMatrix(-1, 1, -1, 1, 1, 10));
+	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
+	glTranslatef(0, 0, -5);
+	DrawContourTree();
+	MyGraphicsTool::PopMatrix();
+	MyGraphicsTool::PopProjectionMatrix();
+
+	//RenderLegend(MyVec2f(-0.8, -1.f), MyVec2f(0.8, -0.9f), tmin, tmax);
 	glPopMatrix();
 
 	glutSwapBuffers();
@@ -864,18 +1187,22 @@ void key(unsigned char c, int x, int y){
 		break;
 	case 'h':
 		thresHigh = min(thresHigh + 0.05f, 1.0f);
+		cout << "higher threshold: " << thresHigh << endl;
 		glutPostRedisplay();
 		break;
 	case 'H':
 		thresHigh = max(thresHigh - 0.05f, thresLow);
+		cout << "higher threshold: " << thresHigh << endl;
 		glutPostRedisplay();
 		break;
 	case 'l':
 		thresLow = min(thresLow + 0.05f, thresHigh);
+		cout << "lower threshold: " << thresLow << endl;
 		glutPostRedisplay();
 		break;
 	case 'L':
 		thresLow = max(thresLow - 0.05f, 0.f);
+		cout << "lower threshold: " << thresLow << endl;
 		glutPostRedisplay();
 		break;
 	case 'v':
@@ -920,15 +1247,18 @@ void key(unsigned char c, int x, int y){
 }
 
 int main(int argc, char* argv[]){
-	
 	cout << "Loading volumes ..." << endl;
 	//vol.Read("average_s1.nii");
 	faVol.Read("target.nii.gz");
 	faVol /= faVol.max;
-	tVol.Read("average.nii");
+	tVol.Read("average.nii.gz");
 	tmin = tVol.min;
 	tmax = tVol.max;
 	tVol /= tVol.max;
+
+	cout << "Building Contour Tree ..." << endl;
+	BuildContourTree();
+
 	trackVol.Read("ACR_300.nii");
 	trackVol /= trackVol.max;
 
@@ -957,7 +1287,6 @@ int main(int argc, char* argv[]){
 	}
 	glutCreateWindow("Graph Explorer");
 	glewInit();
-
 	CompileShader();
 	LoadPlaneShaderData();
 	LoadCubeShaderData();
@@ -966,7 +1295,6 @@ int main(int argc, char* argv[]){
 	LoadVolumeTexture(faVolTex, faVol);
 	LoadVolumeTexture(tVolTex, tVol);
 	LoadVolumeTexture(trackVolTex, trackVol);
-
 	//glutFullScreen();
 
 	glEnable(GL_DEPTH_TEST);

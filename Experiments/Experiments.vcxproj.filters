@@ -19,6 +19,9 @@
     <Filter Include="Ric">
       <UniqueIdentifier>{5f51566c-e648-4a43-b71f-c56d73795be0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="HeightField">
+      <UniqueIdentifier>{be098120-e68a-4324-9fa3-9774c0e51579}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Wijk_FlowVis.cpp">
@@ -151,6 +154,84 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Helper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="transformGradients.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="contourView.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\Ball.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\BallAux.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\BallMath.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\FollowCubeTables.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Collapse.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Construction.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Contour_Follow.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Debug.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Draw_Trees.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Flexible.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Layout.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Marching_Cubes.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\HeightField_Utilities.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\Superarc.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="HeightField\Supernode.cpp">
+      <Filter>HeightField</Filter>
+    </ClCompile>
+    <ClCompile Include="MyContourTree.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="meshClean.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyHalfEdgeMesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MultiThreading.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MySlider.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyContourTree_VolumeRendering.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BrainCTviewer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyContourTree_Layout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -299,6 +380,51 @@
     <ClInclude Include="Helper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="HeightField\Array3D.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\Ball.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\BallAux.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\BallMath.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\Component.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\FollowCubeTables.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\HeightField.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\PriorityIndex.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\Superarc.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="HeightField\Supernode.h">
+      <Filter>HeightField</Filter>
+    </ClInclude>
+    <ClInclude Include="MyContourTree.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyHalfEdgeMesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MySlider.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyFrameBuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyBox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="raycasting.vert">
@@ -323,6 +449,12 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="plane.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="selVol.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="selVol.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

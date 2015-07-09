@@ -24,7 +24,7 @@ bool bStereo = false;
 // 0: middle, 1: left, 2:right
 int eyeIfNonStereo = 0;
 
-int windowWidth = 1800;
+int windowWidth = 2700;
 int windowHeight = 900;
 float zDistance = 1000;
 
@@ -34,7 +34,7 @@ int dragFocus = -1;
 
 GLfloat mesh_color[] = { 0.5, 0.3, 0, 1 };
 // CT
-MyContourTree *field;
+MyContourTree *field1 = 0, *field2 = 0;
 float logSize = 0.32;
 float isovalue = 0.8;
 
@@ -58,7 +58,7 @@ float thresHigh = 1.0;
 float thresLow = 0.1;
 float sampeRate = 512.f;
 // plane, mesh, tracts, volume, contours
-bool bdraw[5] = { true, true, false, false, true };
+bool bdraw[6] = { false, true, false, false, false, false };
 MyVec3f sizeLow(0, 0, 0);
 MyVec3f sizeHigh(0.5, 0.5, 0.5);
 int sizePosIdx = 2;
@@ -400,7 +400,7 @@ float computeFA(float e1, float e2, float e3){
 	float diff1 = e1 - e2;
 	float diff2 = e2 - e3;
 	float diff3 = e3 - e1;
-	return sqrtf((diff1*diff1 + diff2*diff2 + diff3*diff3)/(e1*e1+e2*e2+e3*e3)*0.5f);
+	return sqrtf((diff1*diff1 + diff2*diff2 + diff3*diff3) / (e1*e1 + e2*e2 + e3*e3)*0.5f);
 }
 
 void doFAfile(){
@@ -447,7 +447,7 @@ void doFAfile(){
 		faoutfile << svlData[i].size() / 6 << endl;
 		for (int j = 0; j < svlData[i].size(); j++){
 			faoutfile << svlData[i][j];
-			if (j % 6 == 5 ) faoutfile << endl;
+			if (j % 6 == 5) faoutfile << endl;
 			else faoutfile << ' ';
 		}
 	}
@@ -506,7 +506,7 @@ void drawTracksFA(){
 				//MyGraphicsTool::Color(MyColor4f(color.b, color.g, color.r, den));
 				//glColor3f(den, den, den);
 				glVertex3f(p.x, p.y, p.z);
-				
+
 			}
 			glEnd();
 		}
@@ -545,7 +545,7 @@ void drawMeshGlass(const MyMesh& mesh){
 	glGetFloatv(GL_PROJECTION_MATRIX, projMat);
 	glUniformMatrix4fv(location, 1, GL_FALSE, projMat);
 	location = glGetUniformLocation(meshProgram, "cutCone");
-	glUniform3f(location, (sizeHigh[0] - 0.5) * tVol.get_numx(), 
+	glUniform3f(location, (sizeHigh[0] - 0.5) * tVol.get_numx(),
 		(sizeHigh[1] - 0.5) * tVol.get_numy(), (sizeHigh[2] - 0.5) * tVol.get_numz());
 	location = glGetUniformLocation(meshProgram, "transExp");
 	glUniform1f(location, transparencyExponent);
@@ -590,12 +590,12 @@ void drawMeshSolid(const MyMesh& mesh, const int cuttingPlane, bool showCut = fa
 	glLightfv(GL_LIGHT0, GL_SPECULAR, diffuse);
 	float bias = 0.00;
 	GLdouble equa[][4] = { { 0, 0, -1, sizeHigh[2] + bias },
-		{ -1, 0, 0, sizeHigh[0] + bias },
-		{ 0, -1, 0, sizeHigh[1] + bias }
+	{ -1, 0, 0, sizeHigh[0] + bias },
+	{ 0, -1, 0, sizeHigh[1] + bias }
 	};
 	GLdouble equaBack[][4] = { { 0, 0, 1, -sizeHigh[2] - bias },
-		{ 1, 0, 0, -sizeHigh[0] - bias },
-		{ 0, 1, 0, -sizeHigh[1] - bias }
+	{ 1, 0, 0, -sizeHigh[0] - bias },
+	{ 0, 1, 0, -sizeHigh[1] - bias }
 	};
 
 	if (!showCut){
@@ -675,28 +675,70 @@ void RenderTexture(int texture, MyVec2f lowPos, MyVec2f highPos){
 	MyGraphicsTool::PopProjectionMatrix();
 }
 
-void RenderLegend(MyVec2f lowPos, MyVec2f highPos, float lowValue, float highValue){
+void RenderLegend(MyVec2f lowPos, MyVec2f highPos, float lowValue, float highValue, bool isVertical = false){
 	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
 	MyGraphicsTool::PushProjectionMatrix();
 	MyGraphicsTool::PushMatrix();
 	MyGraphicsTool::LoadProjectionMatrix(&MyMatrixf::OrthographicMatrix(-1, 1, -1, 1, 1, 10));
 	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
-	float step = (highPos[0]-lowPos[0]) / (bitmap.GetWidth()-1);
-	MyGraphicsTool::BeginQuadStrip();
-	for (int i = 0; i < bitmap.GetWidth(); i++){
-		MyGraphicsTool::Color(bitmap.GetColor(i, 0));
-		MyGraphicsTool::Vertex(MyVec3f(lowPos[0] + step*i, lowPos[1], -5));
-		MyGraphicsTool::Color(bitmap.GetColor(i, 1));
-		MyGraphicsTool::Vertex(MyVec3f(lowPos[0] + step*i, highPos[1], -5));
+	if (isVertical){
+		float step = (highPos[1] - lowPos[1]) / (bitmap.GetWidth() - 1);
+		MyGraphicsTool::BeginQuadStrip();
+		for (int i = 0; i < bitmap.GetWidth(); i++){
+			MyGraphicsTool::Color(MyColor4f(bitmap.GetColor(i, 0).b, bitmap.GetColor(i, 0).g, bitmap.GetColor(i, 0).r));
+			MyGraphicsTool::Vertex(MyVec3f(lowPos[0], lowPos[1] + step*i, -5));
+			MyGraphicsTool::Color(MyColor4f(bitmap.GetColor(i, 1).b, bitmap.GetColor(i, 0).g, bitmap.GetColor(i, 0).r));
+			MyGraphicsTool::Vertex(MyVec3f(highPos[0], lowPos[1] + step*i, -5));
+		}
+		MyGraphicsTool::EndPrimitive();
+
+		MyString lowValueStr(lowValue);
+		MyString highValueStr(highValue);
+		MyGraphicsTool::Color(MyColor4f(0,0,0));
+		MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], lowPos[1], -5), lowValueStr);
+		MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], highPos[1], -5), highValueStr);
+		MyGraphicsTool::PopMatrix();
+		MyGraphicsTool::PopProjectionMatrix();
 	}
+	else{
+		float step = (highPos[0] - lowPos[0]) / (bitmap.GetWidth() - 1);
+		MyGraphicsTool::BeginQuadStrip();
+		for (int i = 0; i < bitmap.GetWidth(); i++){
+			MyGraphicsTool::Color(MyColor4f(bitmap.GetColor(i, 0).b, bitmap.GetColor(i, 0).g, bitmap.GetColor(i, 0).r));
+			MyGraphicsTool::Vertex(MyVec3f(lowPos[0] + step*i, lowPos[1], -5));
+			MyGraphicsTool::Color(MyColor4f(bitmap.GetColor(i, 1).b, bitmap.GetColor(i, 0).g, bitmap.GetColor(i, 0).r));
+			MyGraphicsTool::Vertex(MyVec3f(lowPos[0] + step*i, highPos[1], -5));
+		}
+		MyGraphicsTool::EndPrimitive();
+
+		MyString lowValueStr(lowValue);
+		MyString highValueStr(highValue);
+		MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(lowPos[0], highPos[1], -5), lowValueStr, 1);
+		MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], highPos[1], -5), highValueStr, 1);
+		MyGraphicsTool::PopMatrix();
+		MyGraphicsTool::PopProjectionMatrix();
+	}
+}
+
+
+void RenderLegend(float xPos, float yPos, float maxCount, float scale, float binWidth){
+
+	MyGraphicsTool::Color(MyColor4f(1, 0, 0, 1));
+	float height = maxCount*scale / 2;
+	MyGraphicsTool::BeginLineStrip();
+	MyGraphicsTool::Vertex(MyVec3f(xPos - height, yPos + 0.01, 0));
+	MyGraphicsTool::Vertex(MyVec3f(xPos - height, yPos, 0));
+	MyGraphicsTool::Vertex(MyVec3f(xPos + height, yPos, 0));
+	MyGraphicsTool::Vertex(MyVec3f(xPos + height, yPos + 0.01, 0));
 	MyGraphicsTool::EndPrimitive();
 
-	MyString lowValueStr(lowValue);
-	MyString highValueStr(highValue);
-	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(lowPos[0], highPos[1], -5), lowValueStr, 1);
-	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(highPos[0], highPos[1], -5), highValueStr, 1);
-	MyGraphicsTool::PopMatrix();
-	MyGraphicsTool::PopProjectionMatrix();
+	MyString valueStr(maxCount);
+	valueStr += " per "+MyString(binWidth)+" FA Interval";
+	if (height == 0){
+		valueStr = "Linear Legend for Comparison";
+	}
+	MyPrimitiveDrawer::DrawBitMapTextLarge(MyVec3f(xPos, yPos + 0.01, 0), valueStr, 1);
+
 }
 
 void drawPlane(){
@@ -752,7 +794,7 @@ int RenderCubeCoords(){
 	glEnable(GL_CULL_FACE);
 	MyGraphicsTool::SetBackgroundColor(MyColor4f(0.5, 0.5, 0.5, 0));
 	MyGraphicsTool::ClearFrameBuffer();
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth/2, windowHeight));
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
 
 	glCullFace(GL_FRONT);
 	glUseProgram(cubeProgram);
@@ -825,7 +867,7 @@ void RenderRay(){
 	glUniform3f(location, sizeHigh[0], sizeHigh[1], sizeHigh[2]);
 
 	location = glGetUniformLocation(shaderProgram, "windowWidth");
-	glUniform1f(location, windowWidth/2);
+	glUniform1f(location, windowWidth / 3);
 
 	location = glGetUniformLocation(shaderProgram, "windowHeight");
 	glUniform1f(location, windowHeight);
@@ -861,7 +903,7 @@ void RenderRay(){
 
 void display(){
 
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth/2, windowHeight));
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
 	glClearColor(1, 1, 1, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -911,7 +953,7 @@ void display(){
 		RenderCubeCoords();
 		RenderRay();
 	}
-	if (bdraw[4]){
+	if (bdraw[4] || bdraw[5]){
 		glPushMatrix();
 		glTranslatef(0.5, 0.5, 0.5);
 		glScalef(1, -1, -1);
@@ -921,29 +963,44 @@ void display(){
 		glEnable(GL_LIGHTING);
 		glEnable(GL_LIGHT0);
 		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-		//field->FlexibleContours(true, false);
-		field->DrawSelectedVoxes(true, false);
+		if (bdraw[4]) field1->FlexibleContours(true, false);
+		if (bdraw[5] && field2!=0) field2->FlexibleContours(true, false);
+		//field->DrawSelectedVoxes(true, false);
 		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 		glDisable(GL_LIGHTING);
 		glDisable(GL_LIGHT0);
 		glPopMatrix();
-
-		MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 2, 0, windowWidth / 2, windowHeight));
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glLoadIdentity();
-		glOrtho(-0.02, 1.02, 1.02 * field->MinHeight() - 0.02* field->MaxHeight(), 1.02 * field->MaxHeight() - 0.02* field->MinHeight(), -1.0, 1.0);
-		field->DrawPlanarContourTree(false);
-
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
-		MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 2, windowHeight));
 	}
+	MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 3, 0, windowWidth / 3, windowHeight));
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+	glOrtho(-0.02, 1.02, 1.02 * field1->MinHeight() - 0.02* field1->MaxHeight(), 1.02 * field1->MaxHeight() - 0.02* field1->MinHeight(), -1.0, 1.0);
+	field1->DrawPlanarContourTree();
+
+	if (field2 != 0){
+		MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 3 * 2, 0, windowWidth / 3, windowHeight));
+		field2->SetScaleWidth(field1->GetScaleWidth());
+		field2->DrawPlanarContourTree();
+	}
+
+	//RenderLegend(MyVec2f(- 0.02, -1 / 1.02), MyVec2f(0, 1 / 1.02), field->MinHeight(), field->MaxHeight(), true);
+	MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 2, 0, windowWidth / 3, windowHeight));
+	//field1->DrawLegend(MyVec2f(0.9, 0), MyVec2f(1, 1));
+	float count = field1->MaxComparedArcWidth();
+	if (field2){
+		count = max(field2->MaxComparedArcWidth(), count);
+	}
+	RenderLegend(0.5, 0.9, count, field1->GetComparedArcScaleWidth(), field1->GetBinWidth());
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
 	if (bdraw[1]){
 		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -956,7 +1013,6 @@ void display(){
 		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 	}
 
-	//RenderLegend(MyVec2f(-0.8, -1.f), MyVec2f(0.8, -0.9f), tmin, tmax);
 	glPopMatrix();
 
 	slider.Show();
@@ -967,23 +1023,29 @@ void display(){
 void reshape(int w, int h){
 	windowWidth = w;
 	windowHeight = h;
-	trackBall.Reshape(w/2, h);
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth/2, windowHeight));
+	trackBall.Reshape(w / 3, h);
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
 	//MyMatrixf projectionMatrix = MyMatrixf::OrthographicMatrix(-w / 2 / 80.f, w / 80.f, -h / 80.f, h / 80.f, 0.1f, 2000.f);
 	MyMatrixf projectionMatrix = MyMatrixf::OrthographicMatrix(-1, 1, -1, 1, 0.1f, 2000.f);
 	MyGraphicsTool::LoadProjectionMatrix(&projectionMatrix);
 	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::IdentityMatrix());
-	meshFbo.width = w/2;
+	meshFbo.width = w / 3;
 	meshFbo.height = h;
-	cubeFbo.width = w/2;
+	cubeFbo.width = w / 3;
 	cubeFbo.height = h;
 	BuildGLBuffers(meshFbo);
 	BuildGLBuffers(cubeFbo);
-	slider.SetQuad(0, windowHeight - 50, windowWidth / 2, 50);
+	field1->SetupVolomeRenderingBuffers(windowWidth / 3, windowHeight);
+	field1->MarkSelectedVoxes();
+	if (field2 != 0){
+		field2->SetupVolomeRenderingBuffers(windowWidth / 3, windowHeight);
+		field2->MarkSelectedVoxes();
+	}
+	slider.SetQuad(0, windowHeight - 50, windowWidth / 3, 50);
 }
 
-void selectArc(int x, int y){
-	float width = windowWidth / 2;
+void selectArc(int x, int y, MyContourTree* field){
+	float width = windowWidth / 3;
 	float height = windowHeight;
 	long arcID = field->PickArc(-0.02 + 1.04 * ((float)x / width),
 		(-0.02 + 1.04 * ((float)y / height)));
@@ -992,9 +1054,44 @@ void selectArc(int x, int y){
 	field->SelectComponent(arcID, newHt);
 }
 
+void selectArcCompare(int x, int y, MyContourTree* field){
+	float width = windowWidth / 3;
+	float height = windowHeight;
+	long arcID = field->PickArc(-0.02 + 1.04 * ((float)x / width),
+		(-0.02 + 1.04 * ((float)y / height)));
+	if (arcID == -1) return;
+	field->ClickComparedArc(arcID);
+}
+
+void updateScaleWidth(){
+	float scaleWidth = 1;
+	float scaleWidth1 = 0;
+	float scaleWidth2 = 0;
+	if (field1 != 0){
+		scaleWidth1 = field1->SuggestComparedArcWidthScale();
+	}
+	if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
+	if (field2 != 0){
+		scaleWidth2 = field2->SuggestComparedArcWidthScale();
+	}
+	if (scaleWidth2 != 0)scaleWidth = min(scaleWidth, scaleWidth2);
+	if (scaleWidth != 0){
+		field1->SetComparedArcWidthScale(scaleWidth);
+		if (field2 != 0){
+			field2->SetComparedArcWidthScale(scaleWidth);
+		}
+	}
+	cout << "Field1 Compared Scale Width = " << field1->GetComparedArcScaleWidth() << endl;
+	cout << "Field1 log Scale Width = " << field1->GetScaleWidth() << endl;
+	if (field2 != 0){
+		cout << "Field2 Compared Scale Width = " << field2->GetComparedArcScaleWidth() << endl;
+		cout << "Field2 log Scale Width = " << field2->GetScaleWidth() << endl;
+	}
+}
+
 void mouseKey(int button, int state, int x, int y){
 	if (state == GLUT_DOWN){
-		if (x < windowWidth / 2){
+		if (x < windowWidth / 3){
 			if (y < 50){
 				slider.MouseKey(button, state, x, windowHeight - y);
 				dragFocus = 1;
@@ -1005,14 +1102,40 @@ void mouseKey(int button, int state, int x, int y){
 				dragFocus = 2;
 			}
 		}
-		else{
-			selectArc(x - windowWidth / 2, windowHeight - y);
+		else if (x < windowWidth / 3 * 2){
+			if (button == GLUT_LEFT_BUTTON){
+				selectArc(x - windowWidth / 3, windowHeight - y, field1);
+				field1->MarkSelectedVoxes();
+			}
+			else if (button == GLUT_RIGHT_BUTTON){
+				selectArcCompare(x - windowWidth / 3, windowHeight - y, field1);
+				field2->CompareArcs(field1);
+				updateScaleWidth();
+				field1->SetNodeXPositionsExt();
+				field2->SetNodeXPositionsExt();
+			}
 			dragFocus = 3;
+		}
+		else {
+			if (field2 != 0){
+				if (button == GLUT_LEFT_BUTTON){
+					selectArc(x - windowWidth / 3 * 2, windowHeight - y, field2);
+					field2->MarkSelectedVoxes();
+				}
+				else if (button == GLUT_RIGHT_BUTTON){
+					selectArcCompare(x - windowWidth / 3 * 2, windowHeight - y, field2);
+					field1->CompareArcs(field2);
+					updateScaleWidth();
+					field1->SetNodeXPositionsExt();
+					field2->SetNodeXPositionsExt();
+				}
+			}
+			dragFocus = 4;
 		}
 	}
 	else if (state == GLUT_UP){
 		if (isRotating){
-			trackBall.EndMotion(std::min(x, windowWidth / 2), y);
+			trackBall.EndMotion(std::min(x, windowWidth / 3), y);
 			isRotating = false;
 		}
 		else slider.MouseKey(button, state, x, windowHeight - y);
@@ -1022,19 +1145,33 @@ void mouseKey(int button, int state, int x, int y){
 }
 
 void mouseMove(int x, int y){
-	if (x < windowWidth / 2){
+	if (x < windowWidth / 3){
 		if (y < 50 && dragFocus == 1){
 			slider.MouseMove(x, windowHeight - y);
 		}
-		else if(dragFocus == 2){
+		else if (dragFocus == 2){
 			trackBall.RotateMotion(x, y);
 		}
+		glutPostRedisplay();
 	}
-	else if(dragFocus ==3){
-		isovalue = (-0.02 + (1 - (float)y / windowHeight) * 1.04)* field->MaxHeight();
-		field->UpdateSelection(isovalue);
+	else if (dragFocus == 3){
+		if (field1->selectionRoot != -1){
+			isovalue = (-0.02 + (1 - (float)y / windowHeight) * 1.04)* field1->MaxHeight();
+			field1->UpdateSelection(isovalue);
+			field1->MarkSelectedVoxes();
+			glutPostRedisplay();
+		}
 	}
-	glutPostRedisplay();
+	else if (dragFocus == 4){
+		if (field2 != 0){
+			if (field2->selectionRoot != -1){
+				isovalue = (-0.02 + (1 - (float)y / windowHeight) * 1.04)* field2->MaxHeight();
+				field2->UpdateSelection(isovalue);
+				field2->MarkSelectedVoxes();
+				glutPostRedisplay();
+			}
+		}
+	}
 }
 
 void key(unsigned char c, int x, int y){
@@ -1083,6 +1220,7 @@ void key(unsigned char c, int x, int y){
 	case '3':
 	case '4':
 	case '5':
+	case '6':
 		bdraw[c - '1'] = !bdraw[c - '1'];
 		glutPostRedisplay();
 		break;
@@ -1091,7 +1229,7 @@ void key(unsigned char c, int x, int y){
 		glutPostRedisplay();
 		break;
 	case 'Z':
-		trackBall.ScaleMultiply(1/1.2);
+		trackBall.ScaleMultiply(1 / 1.2);
 		glutPostRedisplay();
 		break;
 	case 'd':
@@ -1164,32 +1302,29 @@ void key(unsigned char c, int x, int y){
 	case 'r':
 	case 'R':
 		CompileShader();
+		field1->ReCompileShaders();
+		if(field2 != 0) field2->ReCompileShaders();
 		glutPostRedisplay();
 		break;
 	case 'i':
-		isovalue = std::fmin(isovalue + 0.02, field->MaxHeight());
-		field->SetIsosurface(isovalue);
+		isovalue = std::fmin(isovalue + 0.02, field1->MaxHeight());
+		field1->SetIsosurface(isovalue);
+		field1->MarkSelectedVoxes();
+		if (field2 != 0) {
+			isovalue = std::fmin(isovalue + 0.02, field2->MaxHeight());
+			field2->SetIsosurface(isovalue);
+			field2->MarkSelectedVoxes();
+		}
 		glutPostRedisplay();
 		break;
 	case 'I':
 		isovalue = std::fmax(isovalue - 0.02, 0);
-		field->SetIsosurface(isovalue);
-		glutPostRedisplay();
-		break;
-	case 'p':
-		logSize = std::fmin(logSize + 0.02, 1);
-		cout << "logSize=" << logSize << endl;
-		field->logTreeSize = logSize;
-		field->UpdateFromLogTreeSize();
-		field->SetNodeXPositionsExt();
-		glutPostRedisplay();
-		break;
-	case 'P':
-		logSize = std::fmax(logSize - 0.02, 0);
-		cout << "logSize=" << logSize << endl;
-		field->logTreeSize = logSize;
-		field->UpdateFromLogTreeSize();
-		field->SetNodeXPositionsExt();
+		field1->SetIsosurface(isovalue);
+		field1->MarkSelectedVoxes();
+		if (field2 != 0) {
+			field2->SetIsosurface(isovalue);
+			field2->MarkSelectedVoxes();
+		}
 		glutPostRedisplay();
 		break;
 	default:
@@ -1202,18 +1337,27 @@ int main(int argc, char* argv[]){
 	slider.SetValueRange(0, 20);
 	slider.BindValue(&transparencyExponent);
 
-	MyContourTree f(argc, argv);
-	field = &f;
-	field->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
-	field->LoadLabelTable("GOBS_look_up_table.txt");
-	//field->ResetCollapsePriority(2);
-	//field->logTreeSize = logSize;
-	//field->UpdateFromLogTreeSize();
-	field->PruneNoneROIs();
-	//field->UpdateArcNodes();
-	field->ComputeArcNames();
-	field->SetNodeXPositionsExt();
-	field->SetIsosurface(isovalue);
+	int nArg = argc - 1;
+	char* argv1[] = { argv[0], argv[1] };
+	field1 = new MyContourTree(nArg, argv1);
+	field1->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
+	field1->LoadLabelTable("GOBS_look_up_table.txt");
+	field1->PruneNoneROIs();
+	field1->ComputeArcNames();
+	field1->SetIsosurface(isovalue);
+	field1->SetNodeXPositionsExt();
+
+	if (argc>2){
+		char* argv2[] = { argv[0], argv[2] };
+		MyContourTree f2(nArg, argv2);
+		field2 = new MyContourTree(nArg, argv2);
+		field2->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
+		field2->LoadLabelTable("GOBS_look_up_table.txt");
+		field2->PruneNoneROIs();
+		field2->ComputeArcNames();
+		field2->SetIsosurface(isovalue);
+		field2->SetNodeXPositionsExt();
+	}
 
 	cout << "Loading volumes ..." << endl;
 	//vol.Read("average_s1.nii");
@@ -1247,7 +1391,11 @@ int main(int argc, char* argv[]){
 	//track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\dti.trk");
 	//track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\ACR_10.trk");
 
-	bitmap.Open("colorScale3.bmp");
+	bitmap.Open("colorScale6.bmp");
+	field1->SetColorMap(&bitmap);
+	if (field2 != 0){
+		field2->SetColorMap(&bitmap);
+	}
 
 	glutInit(&argc, argv);
 	glutInitWindowSize(windowWidth, windowHeight);
@@ -1261,6 +1409,10 @@ int main(int argc, char* argv[]){
 	glutCreateWindow("Graph Explorer");
 	glewInit();
 	LoadColorMap();
+	field1->SetColorTexture(colorTex);
+	if (field2 != 0){
+		field2->SetColorTexture(colorTex);
+	}
 	CompileShader();
 	LoadPlaneShaderData();
 	LoadCubeShaderData();

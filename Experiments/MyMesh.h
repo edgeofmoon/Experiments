@@ -31,10 +31,17 @@ public:
 	MyVec3f ComputeTriangleNormal(int triangleIdx) const;
 	MyVec3f ComputeTriangleNormal(const MyVec3i& triangle) const;
 
+	int ClearNonRegularFaces();
+
 protected:
 	MyArray3f mVertices;
 	MyArray3f mNormals;
 	MyArray3i mTriangles;
 	MyBoundingBox mBox;
+
+	static MyVec2i makeEdge(int i, int j);
+
+	static bool compareEdge(MyVec2i edge0, MyVec2i edge1);
+
 };
 

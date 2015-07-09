@@ -68,25 +68,27 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>./Ric;$(IncludePath)</IncludePath>
-    <SourcePath>./Ric;$(SourcePath)</SourcePath>
+    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;$(IncludePath)</IncludePath>
+    <SourcePath>./Ric;./HeightField;$(SourcePath)</SourcePath>
+    <LibraryPath>C:\Program Files (x86)\VTK\$(Configuration)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>./Ric;$(IncludePath)</IncludePath>
-    <SourcePath>./Ric;$(SourcePath)</SourcePath>
-    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;</IncludePath>
+    <SourcePath>./Ric;./HeightField;$(SourcePath)</SourcePath>
+    <LibraryPath>C:\Program Files (x86)\VTK\$(Configuration)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>./Ric;$(IncludePath)</IncludePath>
-    <SourcePath>./Ric;$(SourcePath)</SourcePath>
+    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;$(IncludePath)</IncludePath>
+    <SourcePath>./Ric;./HeightField;$(SourcePath)</SourcePath>
+    <LibraryPath>C:\Program Files (x86)\VTK\$(Configuration)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>./Ric;$(IncludePath)</IncludePath>
-    <SourcePath>./Ric;$(SourcePath)</SourcePath>
-    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;</IncludePath>
+    <SourcePath>./Ric;./HeightField;$(SourcePath)</SourcePath>
+    <LibraryPath>C:\Program Files (x86)\VTK\$(Configuration)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -99,7 +101,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>glew32.lib;freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glew32.lib;freeglut.lib;vtkalglib-6.2.lib;vtkChartsCore-6.2.lib;vtkCommonColor-6.2.lib;vtkCommonComputationalGeometry-6.2.lib;vtkCommonCore-6.2.lib;vtkCommonDataModel-6.2.lib;vtkCommonExecutionModel-6.2.lib;vtkCommonMath-6.2.lib;vtkCommonMisc-6.2.lib;vtkCommonSystem-6.2.lib;vtkCommonTransforms-6.2.lib;vtkDICOMParser-6.2.lib;vtkDomainsChemistry-6.2.lib;vtkexoIIc-6.2.lib;vtkexpat-6.2.lib;vtkFiltersAMR-6.2.lib;vtkFiltersCore-6.2.lib;vtkFiltersExtraction-6.2.lib;vtkFiltersFlowPaths-6.2.lib;vtkFiltersGeneral-6.2.lib;vtkFiltersGeneric-6.2.lib;vtkFiltersGeometry-6.2.lib;vtkFiltersHybrid-6.2.lib;vtkFiltersHyperTree-6.2.lib;vtkFiltersImaging-6.2.lib;vtkFiltersModeling-6.2.lib;vtkFiltersParallel-6.2.lib;vtkFiltersParallelImaging-6.2.lib;vtkFiltersProgrammable-6.2.lib;vtkFiltersSelection-6.2.lib;vtkFiltersSMP-6.2.lib;vtkFiltersSources-6.2.lib;vtkFiltersStatistics-6.2.lib;vtkFiltersTexture-6.2.lib;vtkFiltersVerdict-6.2.lib;vtkfreetype-6.2.lib;vtkftgl-6.2.lib;vtkGeovisCore-6.2.lib;vtkgl2ps-6.2.lib;vtkGUISupportQt-6.2.lib;vtkGUISupportQtOpenGL-6.2.lib;vtkGUISupportQtSQL-6.2.lib;vtkhdf5-6.2.lib;vtkhdf5_hl-6.2.lib;vtkImagingColor-6.2.lib;vtkImagingCore-6.2.lib;vtkImagingFourier-6.2.lib;vtkImagingGeneral-6.2.lib;vtkImagingHybrid-6.2.lib;vtkImagingMath-6.2.lib;vtkImagingMorphological-6.2.lib;vtkImagingSources-6.2.lib;vtkImagingStatistics-6.2.lib;vtkImagingStencil-6.2.lib;vtkInfovisCore-6.2.lib;vtkInfovisLayout-6.2.lib;vtkInteractionImage-6.2.lib;vtkInteractionStyle-6.2.lib;vtkInteractionWidgets-6.2.lib;vtkIOAMR-6.2.lib;vtkIOCore-6.2.lib;vtkIOEnSight-6.2.lib;vtkIOExodus-6.2.lib;vtkIOExport-6.2.lib;vtkIOGeometry-6.2.lib;vtkIOImage-6.2.lib;vtkIOImport-6.2.lib;vtkIOInfovis-6.2.lib;vtkIOLegacy-6.2.lib;vtkIOLSDyna-6.2.lib;vtkIOMINC-6.2.lib;vtkIOMovie-6.2.lib;vtkIONetCDF-6.2.lib;vtkIOParallel-6.2.lib;vtkIOParallelXML-6.2.lib;vtkIOPLY-6.2.lib;vtkIOSQL-6.2.lib;vtkIOVideo-6.2.lib;vtkIOXML-6.2.lib;vtkIOXMLParser-6.2.lib;vtkjpeg-6.2.lib;vtkjsoncpp-6.2.lib;vtklibxml2-6.2.lib;vtkmetaio-6.2.lib;vtkNetCDF-6.2.lib;vtkNetCDF_cxx-6.2.lib;vtkoggtheora-6.2.lib;vtkParallelCore-6.2.lib;vtkpng-6.2.lib;vtkproj4-6.2.lib;vtkRenderingAnnotation-6.2.lib;vtkRenderingContext2D-6.2.lib;vtkRenderingContextOpenGL-6.2.lib;vtkRenderingCore-6.2.lib;vtkRenderingFreeType-6.2.lib;vtkRenderingFreeTypeOpenGL-6.2.lib;vtkRenderingGL2PS-6.2.lib;vtkRenderingImage-6.2.lib;vtkRenderingLabel-6.2.lib;vtkRenderingLIC-6.2.lib;vtkRenderingLOD-6.2.lib;vtkRenderingOpenGL-6.2.lib;vtkRenderingQt-6.2.lib;vtkRenderingVolume-6.2.lib;vtkRenderingVolumeOpenGL-6.2.lib;vtksqlite-6.2.lib;vtksys-6.2.lib;vtktiff-6.2.lib;vtkverdict-6.2.lib;vtkViewsContext2D-6.2.lib;vtkViewsCore-6.2.lib;vtkViewsInfovis-6.2.lib;vtkViewsQt-6.2.lib;vtkzlib-6.2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -113,7 +115,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>glew32.lib;freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glew32.lib;freeglut.lib;vtkalglib-6.2.lib;vtkChartsCore-6.2.lib;vtkCommonColor-6.2.lib;vtkCommonComputationalGeometry-6.2.lib;vtkCommonCore-6.2.lib;vtkCommonDataModel-6.2.lib;vtkCommonExecutionModel-6.2.lib;vtkCommonMath-6.2.lib;vtkCommonMisc-6.2.lib;vtkCommonSystem-6.2.lib;vtkCommonTransforms-6.2.lib;vtkDICOMParser-6.2.lib;vtkDomainsChemistry-6.2.lib;vtkexoIIc-6.2.lib;vtkexpat-6.2.lib;vtkFiltersAMR-6.2.lib;vtkFiltersCore-6.2.lib;vtkFiltersExtraction-6.2.lib;vtkFiltersFlowPaths-6.2.lib;vtkFiltersGeneral-6.2.lib;vtkFiltersGeneric-6.2.lib;vtkFiltersGeometry-6.2.lib;vtkFiltersHybrid-6.2.lib;vtkFiltersHyperTree-6.2.lib;vtkFiltersImaging-6.2.lib;vtkFiltersModeling-6.2.lib;vtkFiltersParallel-6.2.lib;vtkFiltersParallelImaging-6.2.lib;vtkFiltersProgrammable-6.2.lib;vtkFiltersSelection-6.2.lib;vtkFiltersSMP-6.2.lib;vtkFiltersSources-6.2.lib;vtkFiltersStatistics-6.2.lib;vtkFiltersTexture-6.2.lib;vtkFiltersVerdict-6.2.lib;vtkfreetype-6.2.lib;vtkftgl-6.2.lib;vtkGeovisCore-6.2.lib;vtkgl2ps-6.2.lib;vtkGUISupportQt-6.2.lib;vtkGUISupportQtOpenGL-6.2.lib;vtkGUISupportQtSQL-6.2.lib;vtkhdf5-6.2.lib;vtkhdf5_hl-6.2.lib;vtkImagingColor-6.2.lib;vtkImagingCore-6.2.lib;vtkImagingFourier-6.2.lib;vtkImagingGeneral-6.2.lib;vtkImagingHybrid-6.2.lib;vtkImagingMath-6.2.lib;vtkImagingMorphological-6.2.lib;vtkImagingSources-6.2.lib;vtkImagingStatistics-6.2.lib;vtkImagingStencil-6.2.lib;vtkInfovisCore-6.2.lib;vtkInfovisLayout-6.2.lib;vtkInteractionImage-6.2.lib;vtkInteractionStyle-6.2.lib;vtkInteractionWidgets-6.2.lib;vtkIOAMR-6.2.lib;vtkIOCore-6.2.lib;vtkIOEnSight-6.2.lib;vtkIOExodus-6.2.lib;vtkIOExport-6.2.lib;vtkIOGeometry-6.2.lib;vtkIOImage-6.2.lib;vtkIOImport-6.2.lib;vtkIOInfovis-6.2.lib;vtkIOLegacy-6.2.lib;vtkIOLSDyna-6.2.lib;vtkIOMINC-6.2.lib;vtkIOMovie-6.2.lib;vtkIONetCDF-6.2.lib;vtkIOParallel-6.2.lib;vtkIOParallelXML-6.2.lib;vtkIOPLY-6.2.lib;vtkIOSQL-6.2.lib;vtkIOVideo-6.2.lib;vtkIOXML-6.2.lib;vtkIOXMLParser-6.2.lib;vtkjpeg-6.2.lib;vtkjsoncpp-6.2.lib;vtklibxml2-6.2.lib;vtkmetaio-6.2.lib;vtkNetCDF-6.2.lib;vtkNetCDF_cxx-6.2.lib;vtkoggtheora-6.2.lib;vtkParallelCore-6.2.lib;vtkpng-6.2.lib;vtkproj4-6.2.lib;vtkRenderingAnnotation-6.2.lib;vtkRenderingContext2D-6.2.lib;vtkRenderingContextOpenGL-6.2.lib;vtkRenderingCore-6.2.lib;vtkRenderingFreeType-6.2.lib;vtkRenderingFreeTypeOpenGL-6.2.lib;vtkRenderingGL2PS-6.2.lib;vtkRenderingImage-6.2.lib;vtkRenderingLabel-6.2.lib;vtkRenderingLIC-6.2.lib;vtkRenderingLOD-6.2.lib;vtkRenderingOpenGL-6.2.lib;vtkRenderingQt-6.2.lib;vtkRenderingVolume-6.2.lib;vtkRenderingVolumeOpenGL-6.2.lib;vtksqlite-6.2.lib;vtksys-6.2.lib;vtktiff-6.2.lib;vtkverdict-6.2.lib;vtkViewsContext2D-6.2.lib;vtkViewsCore-6.2.lib;vtkViewsInfovis-6.2.lib;vtkViewsQt-6.2.lib;vtkzlib-6.2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -131,7 +133,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>glew32.lib;freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glew32.lib;freeglut.lib;vtkalglib-6.2.lib;vtkChartsCore-6.2.lib;vtkCommonColor-6.2.lib;vtkCommonComputationalGeometry-6.2.lib;vtkCommonCore-6.2.lib;vtkCommonDataModel-6.2.lib;vtkCommonExecutionModel-6.2.lib;vtkCommonMath-6.2.lib;vtkCommonMisc-6.2.lib;vtkCommonSystem-6.2.lib;vtkCommonTransforms-6.2.lib;vtkDICOMParser-6.2.lib;vtkDomainsChemistry-6.2.lib;vtkexoIIc-6.2.lib;vtkexpat-6.2.lib;vtkFiltersAMR-6.2.lib;vtkFiltersCore-6.2.lib;vtkFiltersExtraction-6.2.lib;vtkFiltersFlowPaths-6.2.lib;vtkFiltersGeneral-6.2.lib;vtkFiltersGeneric-6.2.lib;vtkFiltersGeometry-6.2.lib;vtkFiltersHybrid-6.2.lib;vtkFiltersHyperTree-6.2.lib;vtkFiltersImaging-6.2.lib;vtkFiltersModeling-6.2.lib;vtkFiltersParallel-6.2.lib;vtkFiltersParallelImaging-6.2.lib;vtkFiltersProgrammable-6.2.lib;vtkFiltersSelection-6.2.lib;vtkFiltersSMP-6.2.lib;vtkFiltersSources-6.2.lib;vtkFiltersStatistics-6.2.lib;vtkFiltersTexture-6.2.lib;vtkFiltersVerdict-6.2.lib;vtkfreetype-6.2.lib;vtkftgl-6.2.lib;vtkGeovisCore-6.2.lib;vtkgl2ps-6.2.lib;vtkGUISupportQt-6.2.lib;vtkGUISupportQtOpenGL-6.2.lib;vtkGUISupportQtSQL-6.2.lib;vtkhdf5-6.2.lib;vtkhdf5_hl-6.2.lib;vtkImagingColor-6.2.lib;vtkImagingCore-6.2.lib;vtkImagingFourier-6.2.lib;vtkImagingGeneral-6.2.lib;vtkImagingHybrid-6.2.lib;vtkImagingMath-6.2.lib;vtkImagingMorphological-6.2.lib;vtkImagingSources-6.2.lib;vtkImagingStatistics-6.2.lib;vtkImagingStencil-6.2.lib;vtkInfovisCore-6.2.lib;vtkInfovisLayout-6.2.lib;vtkInteractionImage-6.2.lib;vtkInteractionStyle-6.2.lib;vtkInteractionWidgets-6.2.lib;vtkIOAMR-6.2.lib;vtkIOCore-6.2.lib;vtkIOEnSight-6.2.lib;vtkIOExodus-6.2.lib;vtkIOExport-6.2.lib;vtkIOGeometry-6.2.lib;vtkIOImage-6.2.lib;vtkIOImport-6.2.lib;vtkIOInfovis-6.2.lib;vtkIOLegacy-6.2.lib;vtkIOLSDyna-6.2.lib;vtkIOMINC-6.2.lib;vtkIOMovie-6.2.lib;vtkIONetCDF-6.2.lib;vtkIOParallel-6.2.lib;vtkIOParallelXML-6.2.lib;vtkIOPLY-6.2.lib;vtkIOSQL-6.2.lib;vtkIOVideo-6.2.lib;vtkIOXML-6.2.lib;vtkIOXMLParser-6.2.lib;vtkjpeg-6.2.lib;vtkjsoncpp-6.2.lib;vtklibxml2-6.2.lib;vtkmetaio-6.2.lib;vtkNetCDF-6.2.lib;vtkNetCDF_cxx-6.2.lib;vtkoggtheora-6.2.lib;vtkParallelCore-6.2.lib;vtkpng-6.2.lib;vtkproj4-6.2.lib;vtkRenderingAnnotation-6.2.lib;vtkRenderingContext2D-6.2.lib;vtkRenderingContextOpenGL-6.2.lib;vtkRenderingCore-6.2.lib;vtkRenderingFreeType-6.2.lib;vtkRenderingFreeTypeOpenGL-6.2.lib;vtkRenderingGL2PS-6.2.lib;vtkRenderingImage-6.2.lib;vtkRenderingLabel-6.2.lib;vtkRenderingLIC-6.2.lib;vtkRenderingLOD-6.2.lib;vtkRenderingOpenGL-6.2.lib;vtkRenderingQt-6.2.lib;vtkRenderingVolume-6.2.lib;vtkRenderingVolumeOpenGL-6.2.lib;vtksqlite-6.2.lib;vtksys-6.2.lib;vtktiff-6.2.lib;vtkverdict-6.2.lib;vtkViewsContext2D-6.2.lib;vtkViewsCore-6.2.lib;vtkViewsInfovis-6.2.lib;vtkViewsQt-6.2.lib;vtkzlib-6.2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -149,11 +151,33 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>glew32.lib;freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glew32.lib;freeglut.lib;vtkalglib-6.2.lib;vtkChartsCore-6.2.lib;vtkCommonColor-6.2.lib;vtkCommonComputationalGeometry-6.2.lib;vtkCommonCore-6.2.lib;vtkCommonDataModel-6.2.lib;vtkCommonExecutionModel-6.2.lib;vtkCommonMath-6.2.lib;vtkCommonMisc-6.2.lib;vtkCommonSystem-6.2.lib;vtkCommonTransforms-6.2.lib;vtkDICOMParser-6.2.lib;vtkDomainsChemistry-6.2.lib;vtkexoIIc-6.2.lib;vtkexpat-6.2.lib;vtkFiltersAMR-6.2.lib;vtkFiltersCore-6.2.lib;vtkFiltersExtraction-6.2.lib;vtkFiltersFlowPaths-6.2.lib;vtkFiltersGeneral-6.2.lib;vtkFiltersGeneric-6.2.lib;vtkFiltersGeometry-6.2.lib;vtkFiltersHybrid-6.2.lib;vtkFiltersHyperTree-6.2.lib;vtkFiltersImaging-6.2.lib;vtkFiltersModeling-6.2.lib;vtkFiltersParallel-6.2.lib;vtkFiltersParallelImaging-6.2.lib;vtkFiltersProgrammable-6.2.lib;vtkFiltersSelection-6.2.lib;vtkFiltersSMP-6.2.lib;vtkFiltersSources-6.2.lib;vtkFiltersStatistics-6.2.lib;vtkFiltersTexture-6.2.lib;vtkFiltersVerdict-6.2.lib;vtkfreetype-6.2.lib;vtkftgl-6.2.lib;vtkGeovisCore-6.2.lib;vtkgl2ps-6.2.lib;vtkGUISupportQt-6.2.lib;vtkGUISupportQtOpenGL-6.2.lib;vtkGUISupportQtSQL-6.2.lib;vtkhdf5-6.2.lib;vtkhdf5_hl-6.2.lib;vtkImagingColor-6.2.lib;vtkImagingCore-6.2.lib;vtkImagingFourier-6.2.lib;vtkImagingGeneral-6.2.lib;vtkImagingHybrid-6.2.lib;vtkImagingMath-6.2.lib;vtkImagingMorphological-6.2.lib;vtkImagingSources-6.2.lib;vtkImagingStatistics-6.2.lib;vtkImagingStencil-6.2.lib;vtkInfovisCore-6.2.lib;vtkInfovisLayout-6.2.lib;vtkInteractionImage-6.2.lib;vtkInteractionStyle-6.2.lib;vtkInteractionWidgets-6.2.lib;vtkIOAMR-6.2.lib;vtkIOCore-6.2.lib;vtkIOEnSight-6.2.lib;vtkIOExodus-6.2.lib;vtkIOExport-6.2.lib;vtkIOGeometry-6.2.lib;vtkIOImage-6.2.lib;vtkIOImport-6.2.lib;vtkIOInfovis-6.2.lib;vtkIOLegacy-6.2.lib;vtkIOLSDyna-6.2.lib;vtkIOMINC-6.2.lib;vtkIOMovie-6.2.lib;vtkIONetCDF-6.2.lib;vtkIOParallel-6.2.lib;vtkIOParallelXML-6.2.lib;vtkIOPLY-6.2.lib;vtkIOSQL-6.2.lib;vtkIOVideo-6.2.lib;vtkIOXML-6.2.lib;vtkIOXMLParser-6.2.lib;vtkjpeg-6.2.lib;vtkjsoncpp-6.2.lib;vtklibxml2-6.2.lib;vtkmetaio-6.2.lib;vtkNetCDF-6.2.lib;vtkNetCDF_cxx-6.2.lib;vtkoggtheora-6.2.lib;vtkParallelCore-6.2.lib;vtkpng-6.2.lib;vtkproj4-6.2.lib;vtkRenderingAnnotation-6.2.lib;vtkRenderingContext2D-6.2.lib;vtkRenderingContextOpenGL-6.2.lib;vtkRenderingCore-6.2.lib;vtkRenderingFreeType-6.2.lib;vtkRenderingFreeTypeOpenGL-6.2.lib;vtkRenderingGL2PS-6.2.lib;vtkRenderingImage-6.2.lib;vtkRenderingLabel-6.2.lib;vtkRenderingLIC-6.2.lib;vtkRenderingLOD-6.2.lib;vtkRenderingOpenGL-6.2.lib;vtkRenderingQt-6.2.lib;vtkRenderingVolume-6.2.lib;vtkRenderingVolumeOpenGL-6.2.lib;vtksqlite-6.2.lib;vtksys-6.2.lib;vtktiff-6.2.lib;vtkverdict-6.2.lib;vtkViewsContext2D-6.2.lib;vtkViewsCore-6.2.lib;vtkViewsInfovis-6.2.lib;vtkViewsQt-6.2.lib;vtkzlib-6.2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BrainCTviewer.cpp" />
+    <ClCompile Include="contourView.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="CT_MSC.cpp" />
+    <ClCompile Include="HeightField\Ball.cpp" />
+    <ClCompile Include="HeightField\BallAux.cpp" />
+    <ClCompile Include="HeightField\BallMath.cpp" />
+    <ClCompile Include="HeightField\FollowCubeTables.cpp" />
+    <ClCompile Include="HeightField\HeightField_Collapse.cpp" />
+    <ClCompile Include="HeightField\HeightField_Construction.cpp" />
+    <ClCompile Include="HeightField\HeightField_Contour_Follow.cpp" />
+    <ClCompile Include="HeightField\HeightField_Debug.cpp" />
+    <ClCompile Include="HeightField\HeightField_Draw_Trees.cpp" />
+    <ClCompile Include="HeightField\HeightField_Flexible.cpp" />
+    <ClCompile Include="HeightField\HeightField_Layout.cpp" />
+    <ClCompile Include="HeightField\HeightField_Marching_Cubes.cpp" />
+    <ClCompile Include="HeightField\HeightField_Utilities.cpp" />
+    <ClCompile Include="HeightField\Superarc.cpp" />
+    <ClCompile Include="HeightField\Supernode.cpp" />
     <ClCompile Include="Helper.cpp" />
     <ClCompile Include="Leet.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
@@ -161,13 +185,36 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="meshClean.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="MultiThreading.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="MyBitmap.cpp" />
     <ClCompile Include="MyBoundingBox.cpp" />
     <ClCompile Include="MyBrainViewer.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="MyContourTree.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="MyContourTree_Layout.cpp" />
+    <ClCompile Include="MyContourTree_VolumeRendering.cpp" />
     <ClCompile Include="MyGraphicsTool.cpp" />
+    <ClCompile Include="MyHalfEdgeMesh.cpp" />
     <ClCompile Include="MyImage.cpp" />
     <ClCompile Include="MyMathHelper.cpp" />
     <ClCompile Include="MyMesh.cpp" />
@@ -177,6 +224,12 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="MySlider.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="MyString.cpp" />
@@ -214,6 +267,18 @@
     <ClCompile Include="Ric\zutil.c" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="svd.c" />
+    <ClCompile Include="test.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="transformGradients.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="Wijk_FlowVis.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
@@ -223,12 +288,26 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CT_MSC.h" />
+    <ClInclude Include="HeightField\Array3D.h" />
+    <ClInclude Include="HeightField\Ball.h" />
+    <ClInclude Include="HeightField\BallAux.h" />
+    <ClInclude Include="HeightField\BallMath.h" />
+    <ClInclude Include="HeightField\Component.h" />
+    <ClInclude Include="HeightField\FollowCubeTables.h" />
+    <ClInclude Include="HeightField\HeightField.h" />
+    <ClInclude Include="HeightField\PriorityIndex.h" />
+    <ClInclude Include="HeightField\Superarc.h" />
+    <ClInclude Include="HeightField\Supernode.h" />
     <ClInclude Include="Helper.h" />
     <ClInclude Include="MyArray.h" />
     <ClInclude Include="MyBitmap.h" />
     <ClInclude Include="MyBoundingBox.h" />
+    <ClInclude Include="MyBox.h" />
     <ClInclude Include="MyColor4.h" />
+    <ClInclude Include="MyContourTree.h" />
+    <ClInclude Include="MyFrameBuffer.h" />
     <ClInclude Include="MyGraphicsTool.h" />
+    <ClInclude Include="MyHalfEdgeMesh.h" />
     <ClInclude Include="MyImage.h" />
     <ClInclude Include="MyLine.h" />
     <ClInclude Include="MyMathHelper.h" />
@@ -237,6 +316,7 @@
     <ClInclude Include="MyPolyLine.h" />
     <ClInclude Include="MyPrimitiveDrawer.h" />
     <ClInclude Include="MyQuarternion.h" />
+    <ClInclude Include="MySlider.h" />
     <ClInclude Include="MyString.h" />
     <ClInclude Include="MyTrackBall.h" />
     <ClInclude Include="MyTracks.h" />
@@ -280,6 +360,8 @@
     <None Include="plane.vert" />
     <None Include="raycasting.frag" />
     <None Include="raycasting.vert" />
+    <None Include="selVol.frag" />
+    <None Include="selVol.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

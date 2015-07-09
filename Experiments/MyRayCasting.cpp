@@ -1054,7 +1054,7 @@ int main(int argc, char* argv[]){
 	cout << "Loading tracts ..." << endl;
 	//ptract = MakeTractsFromFile("region_s5.data");
 	//track.Read("ACR.trk");
-	track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\ACR_10.trk");
+	track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\dti.trk");
 	//MyGraphicsTool::Init(&argc, argv);
 	glutInit(&argc, argv);
 

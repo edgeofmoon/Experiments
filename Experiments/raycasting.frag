@@ -225,7 +225,7 @@ void main() {
 		vec3 loc2 = vec3(loc.x,1-loc.y,loc.z);
 		float density = texture(densityVol, loc2).r;
 		float attri = texture(attriVol, loc2).r;
-		if(density>thresLow && attri>0.5){
+		if(density>thresLow ){
 			//vec3 color = GetLightedColor(loc, fragPos+eyeDir*accDistance, density).xyz;
 			vec3 color = GetLightedColor(loc2, fragPos+eyeDir*accDistance, attri).xyz;
 			accColor = color;
@@ -241,7 +241,7 @@ void main() {
 	vec3 dir2 = normalize(vec3(inverse(mvMat)*vec4(eyeDir,0)));
 	vec3 pos = rawPos+dir2*accDistance;
 	if(pos.x<cutCone.x || pos.y<cutCone.y || pos.z<cutCone.z || !fvisible){
-		discard;
+		//discard;
 	}
 	fragColour=vec4(accColor*(1-accTransparency),(1-accTransparency));
 	//fragColour=vec4(accTransparency,accTransparency,accTransparency,accTransparency);

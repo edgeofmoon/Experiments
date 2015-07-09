@@ -1149,6 +1149,9 @@ int RicVolumeSet::Read_NIFTI(string fname)
 							//data[k][j][i] = (*uptr)
 							//	* nim->scl_slope + nim->scl_inter;
 							data[k][j][i] = (*uptr);
+							if (data[k][j][i] > 1  ){
+								int debug =1;
+							}
 							uptr++;
 						}
 					}

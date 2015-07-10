@@ -10,6 +10,7 @@ public:
 	void Show();
 	void SetValueRange(const Type&start, const Type&end);
 	void SetSteps(int n);
+	void SetValue(Type value);
 	Type GetValue() const;
 	void BindValue(Type* valuePtr);
 	void BindDirty(bool* dirtyPtr);

@@ -247,6 +247,15 @@ MyContourTree::MyContourTree(int argc, char** argv)
 	maxHeight = 1;
 	mScaleWidth = 1;
 	mComparedScaleWidth = 0.1;
+	mPruningThreshold = 10;
+	mSuperArcsBkup = NULL;
+	mSuperNodesBkup = NULL;
+	mSuperArcsBkup = new Superarc[nSuperarcs];
+	mSuperNodesBkup = new Supernode[nSupernodes];
+	mValidNodes = new long[nSupernodes];
+	mValidArcs = new long[nSuperarcs * 2];
+
+	BackupTree();
 	//SetNodeXPositionsExt();
 }
 
@@ -558,6 +567,10 @@ void MyContourTree::CombineTrees()											//	combines join & split trees to p
 MyContourTree::~MyContourTree()
 {
 	delete[] supernodesExt;
+	delete[] mSuperArcsBkup;
+	delete[] mSuperNodesBkup;
+	delete[] mValidNodes;
+	delete[] mValidArcs;
 	delete mLabelVolume;
 }
 
@@ -2348,7 +2361,7 @@ std::string MyContourTree::ComputeArcName(long arc){
 		pQueue.pop();
 		if (majorEle.priority <= voxes.size() / 5){
 			// mostly zero
-			return "";
+			return "*"+mLabelName[majorEle.index];
 		}
 		else{
 			if (pQueue.empty()){
@@ -2378,6 +2391,8 @@ void MyContourTree::ComputeArcNames(){
 }
 
 void MyContourTree::PruneNoneROIs(){
+	RestoreTree();
+
 	int pruned;
 	int numPruned = 0;
 
@@ -2413,7 +2428,7 @@ void MyContourTree::PruneNoneROIs(){
 		long whichArc = leaveQueue.front();
 		leaveQueue.pop();
 		long roiCount = GetArcRoiCount(whichArc);
-		if (roiCount < 10){
+		if (roiCount < mPruningThreshold){
 		//if (mArcName[whichArc].empty()){
 			SingleCollapse(whichArc);
 			numPruned++;

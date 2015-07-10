@@ -51,8 +51,10 @@ public:
 	void ComputeArcNames();
 	long GetArcRoiCount(long arc);
 	int PickArc(float x, float y);
+	void SetPruningThreshold(int thres){ mPruningThreshold = thres; };
 
 protected:
+	int mPruningThreshold;
 	SuperNodeExt* supernodesExt;
 	RicVolume* mLabelVolume;
 	std::map<int, std::string> mLabelName;
@@ -124,6 +126,7 @@ protected:
 	void getSubArcs(long rootNode, long parentArc, std::vector<long>& subArcs);
 	float getSubTreeWidth(long rootNode, long parentNode);
 	float subTreeLayoutWidth(long rootNode, long parentNode);
+	bool isBrunchLeft(long brunchNode, long rootNode);
 	long nodes2Arc(long node1, long node2);
 	float getPathWidth(vector<long>& pathNodes, long parentNode);
 	float fillUpper(vector<MyVec2f>& upperFilled, float bottom, float top, float width);
@@ -155,5 +158,18 @@ public:
 	float MaxComparedArcWidth() const;
 	float SuggestComparedArcWidthScale() const;
 	int CompareArcs(MyContourTree* ct);
+	void ClearComparedArcs() { mArcCompared.clear(); };
+
+// prune
+protected:
+	Superarc* mSuperArcsBkup;
+	Supernode* mSuperNodesBkup;
+	long *mValidNodes, *mValidArcs;
+	long mNumValidNodes, mNumValidArcs;
+	long mNumSuperArcsBkup, mNumSuperNodesBkup;
+	long mNextSuperarcBkup, mSavedNextSuperarcBkup;
+	long mNextSupernodeBkup;
+	void BackupTree();
+	void RestoreTree();
 };
 

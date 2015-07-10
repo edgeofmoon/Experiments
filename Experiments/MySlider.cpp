@@ -24,15 +24,24 @@ void MySlider<Type>::Show(){
 	MyGraphicsTool::PushMatrix();
 	MyGraphicsTool::LoadModelViewMatrix(&MyMatrixf::OrthographicMatrix(0, 1, 0, 1, 0, 1));
 	MyGraphicsTool::Color(MyColor4f(0, 0, 0));
-	MyGraphicsTool::BeginLines();
-	MyGraphicsTool::Vertex(MyVec3f(0, 0.5, -0.5));
-	MyGraphicsTool::Vertex(MyVec3f(1, 0.5, -0.5));
+	MyGraphicsTool::WirePolygon();
+	MyGraphicsTool::BeginQuads();
+	float unitPerPixelX = 1.f / mWidth;
+	float unitPerPixelY = 1.f / mHeight;
+	MyGraphicsTool::Vertex(MyVec3f(0 + unitPerPixelX, 0 + unitPerPixelY, -0.5));
+	MyGraphicsTool::Vertex(MyVec3f(1 - unitPerPixelX, 0 + unitPerPixelY, -0.5));
+	MyGraphicsTool::Vertex(MyVec3f(1 - unitPerPixelX, 1 - unitPerPixelY, -0.5));
+	MyGraphicsTool::Vertex(MyVec3f(0 + unitPerPixelX, 1 - unitPerPixelY, -0.5));
 	MyGraphicsTool::EndPrimitive();
-	float xPos = (mCurrentValue - mStart) / (mEnd - mStart);
-	MyGraphicsTool::BeginLines();
-	MyGraphicsTool::Vertex(MyVec3f(xPos, 0, -0.5));
-	MyGraphicsTool::Vertex(MyVec3f(xPos, 1, -0.5));
+	float xPos = (mCurrentValue - mStart) / (float)(mEnd - mStart);
+	float sliderHalfWidth = 5 * unitPerPixelX;
+	MyGraphicsTool::BeginQuads();
+	MyGraphicsTool::Vertex(MyVec3f(xPos - sliderHalfWidth, 0 + unitPerPixelY, -0.5));
+	MyGraphicsTool::Vertex(MyVec3f(xPos + sliderHalfWidth, 0 + unitPerPixelY, -0.5));
+	MyGraphicsTool::Vertex(MyVec3f(xPos + sliderHalfWidth, 1 - unitPerPixelY, -0.5));
+	MyGraphicsTool::Vertex(MyVec3f(xPos - sliderHalfWidth, 1 - unitPerPixelY, -0.5));
 	MyGraphicsTool::EndPrimitive();
+	MyGraphicsTool::FillPolygon();
 	MyGraphicsTool::PopProjectionMatrix();
 	MyGraphicsTool::PopMatrix();
 }
@@ -47,6 +56,11 @@ void MySlider<Type>::SetValueRange(const Type&start, const Type&end){
 template<typename Type>
 void MySlider<Type>::SetSteps(int n){
 	mSteps = n;
+}
+
+template<typename Type>
+void MySlider<Type>::SetValue(Type value){
+	mCurrentValue = value;
 }
 
 template<typename Type>

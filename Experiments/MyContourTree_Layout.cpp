@@ -219,21 +219,7 @@ float MyContourTree::subTreeLayoutWidth(long rootNode, long parentNode){
 	map<long, float> brunchStartX;
 	// decide left and right
 	for (int i = 0; i < brunchNodes.size(); i++){
-		long brunchNode = brunchNodes[i];
-		float *value = supernodes[brunchNode].value;
-		long x, y, z;
-		height.ComputeIndex(value, x, y, z);
-		int label = mLabelVolume->get_at_index(x, y, z);
-		long brunchArc = nodes2Arc(brunchNode, rootNodes[i]);
-		string name = mArcName[brunchArc];
-		if (IsNameLeft(name)) isLeft[i] = true;
-		else if (IsNameRight(name)) isLeft[i] = false;
-		else if (label % 2 == 1){
-			isLeft[i] = false;
-		}
-		else{
-			isLeft[i] = true;
-		}
+		isLeft[i] = isBrunchLeft(brunchNodes[i], rootNodes[i]);
 	}
 
 	float centerPathWidth = getPathWidth(centerPath, parentNode);
@@ -333,6 +319,22 @@ float MyContourTree::subTreeLayoutWidth(long rootNode, long parentNode){
 	return totalWidth;
 }
 
+bool MyContourTree::isBrunchLeft(long brunchNode, long rootNode){
+	float *value = supernodes[brunchNode].value;
+	long x, y, z;
+	height.ComputeIndex(value, x, y, z);
+	int label = mLabelVolume->get_at_index(x, y, z);
+	string name = mArcName[nodes2Arc(brunchNode, rootNode)];
+	if (IsNameLeft(name)) return true;
+	else if (IsNameRight(name)) return false;
+	else if (label % 2 == 1){
+		return false;
+	}
+	else{
+		return true;
+	}
+}
+
 float MyContourTree::UpdateSubTreeLayout(long rootNode, long parentNode, float xStart, float xEnd){
 	int numLeaves = supernodesExt[rootNode].numLeaves;
 	vector<long> centerPath;
@@ -402,24 +404,7 @@ float MyContourTree::UpdateSubTreeLayout(long rootNode, long parentNode, float x
 	map<long, float> brunchStartX;
 	// decide left and right
 	for (int i = 0; i < brunchNodes.size(); i++){
-		long brunchNode = brunchNodes[i];
-		float *value = supernodes[brunchNode].value;
-		long x, y, z;
-		height.ComputeIndex(value, x, y, z);
-		int label = mLabelVolume->get_at_index(x, y, z);
-		string name = mArcName[nodes2Arc(brunchNode, rootNodes[i])];
-		if (supernodes[rootNodes[i]].downDegree == 0)
-		{
-			int debug = 1;
-		}
-		if (IsNameLeft(name)) isLeft[i] = true;
-		else if (IsNameRight(name)) isLeft[i] = false;
-		else if (label % 2 == 1){
-			isLeft[i] = false;
-		}
-		else{
-			isLeft[i] = true;
-		}
+		isLeft[i] = isBrunchLeft(brunchNodes[i], rootNodes[i]);
 	}
 
 	float centerPathWidth = getPathWidth(centerPath, parentNode);

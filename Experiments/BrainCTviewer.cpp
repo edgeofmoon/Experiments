@@ -19,6 +19,12 @@ using namespace std;
 #include "Ric/RicVolume.h"
 #include "Ric/RicMesh.h"
 
+#define DRAG_FOCUS_NONE 0
+#define DRAG_FOCUS_SLIDER_0 1
+#define DRAG_FOCUS_SLIDER_1 2
+#define DRAG_FOCUS_VOL_0 3
+#define DRAG_FOCUS_TREE_0 4
+#define DRAG_FOCUS_TREE_1 5
 
 bool bStereo = false;
 // 0: middle, 1: left, 2:right
@@ -29,6 +35,7 @@ int windowHeight = 900;
 float zDistance = 1000;
 
 MySlider<float> slider;
+MySlider<int> pruneSlider;
 float transparencyExponent = 5;
 int dragFocus = -1;
 
@@ -62,7 +69,8 @@ bool bdraw[6] = { false, true, false, false, false, false };
 MyVec3f sizeLow(0, 0, 0);
 MyVec3f sizeHigh(0.5, 0.5, 0.5);
 int sizePosIdx = 2;
-
+int pruningThreshold = 20;
+bool pruningThresholdChanged = false;
 
 
 frameBuffer meshFbo;
@@ -1016,6 +1024,7 @@ void display(){
 	glPopMatrix();
 
 	slider.Show();
+	pruneSlider.Show();
 
 	glutSwapBuffers();
 }
@@ -1041,7 +1050,8 @@ void reshape(int w, int h){
 		field2->SetupVolomeRenderingBuffers(windowWidth / 3, windowHeight);
 		field2->MarkSelectedVoxes();
 	}
-	slider.SetQuad(0, windowHeight - 50, windowWidth / 3, 50);
+	slider.SetQuad(0, windowHeight - 50, windowWidth / 6, 50);
+	pruneSlider.SetQuad(windowWidth / 6, windowHeight - 50, windowWidth / 6, 50);
 }
 
 void selectArc(int x, int y, MyContourTree* field){
@@ -1089,17 +1099,47 @@ void updateScaleWidth(){
 	}
 }
 
+void updatePruning(){
+	//return;
+	if (pruningThresholdChanged){
+		if (field1){
+			field1->ClearComparedArcs();
+			field1->SetPruningThreshold(pruningThreshold);
+			field1->PruneNoneROIs();
+			field1->ComputeArcNames();
+			field1->SetIsosurface(isovalue);
+			field1->SetNodeXPositionsExt();
+		}
+		if (field2){
+			field2->ClearComparedArcs();
+			field2->SetPruningThreshold(pruningThreshold);
+			field2->PruneNoneROIs();
+			field2->ComputeArcNames();
+			field2->SetIsosurface(isovalue);
+			field2->SetNodeXPositionsExt();
+		}
+		pruningThresholdChanged = false;
+	}
+}
+
 void mouseKey(int button, int state, int x, int y){
 	if (state == GLUT_DOWN){
 		if (x < windowWidth / 3){
 			if (y < 50){
-				slider.MouseKey(button, state, x, windowHeight - y);
-				dragFocus = 1;
+				if (x < windowWidth / 6){
+					slider.MouseKey(button, state, x, windowHeight - y);
+					dragFocus = DRAG_FOCUS_SLIDER_0;
+				}
+				else{
+					pruneSlider.MouseKey(button, state, x, windowHeight - y);
+					updatePruning();
+					dragFocus = DRAG_FOCUS_SLIDER_1;
+				}
 			}
 			else{
 				trackBall.StartMotion(x, y);
 				isRotating = true;
-				dragFocus = 2;
+				dragFocus = DRAG_FOCUS_VOL_0;
 			}
 		}
 		else if (x < windowWidth / 3 * 2){
@@ -1114,7 +1154,7 @@ void mouseKey(int button, int state, int x, int y){
 				field1->SetNodeXPositionsExt();
 				field2->SetNodeXPositionsExt();
 			}
-			dragFocus = 3;
+			dragFocus = DRAG_FOCUS_TREE_0;
 		}
 		else {
 			if (field2 != 0){
@@ -1130,7 +1170,7 @@ void mouseKey(int button, int state, int x, int y){
 					field2->SetNodeXPositionsExt();
 				}
 			}
-			dragFocus = 4;
+			dragFocus = DRAG_FOCUS_TREE_1;
 		}
 	}
 	else if (state == GLUT_UP){
@@ -1139,22 +1179,28 @@ void mouseKey(int button, int state, int x, int y){
 			isRotating = false;
 		}
 		else slider.MouseKey(button, state, x, windowHeight - y);
-		dragFocus = -1;
+		dragFocus = DRAG_FOCUS_NONE;
 	}
 	glutPostRedisplay();
 }
 
 void mouseMove(int x, int y){
 	if (x < windowWidth / 3){
-		if (y < 50 && dragFocus == 1){
-			slider.MouseMove(x, windowHeight - y);
+		if (y < 50){
+			if (dragFocus == DRAG_FOCUS_SLIDER_0){
+				slider.MouseMove(x, windowHeight - y);
+			}
+			else if (dragFocus == DRAG_FOCUS_SLIDER_1){
+				pruneSlider.MouseMove(x, windowHeight - y);
+				updatePruning();
+			}
 		}
-		else if (dragFocus == 2){
+		else if (dragFocus == DRAG_FOCUS_VOL_0){
 			trackBall.RotateMotion(x, y);
 		}
 		glutPostRedisplay();
 	}
-	else if (dragFocus == 3){
+	else if (dragFocus == DRAG_FOCUS_TREE_0){
 		if (field1->selectionRoot != -1){
 			isovalue = (-0.02 + (1 - (float)y / windowHeight) * 1.04)* field1->MaxHeight();
 			field1->UpdateSelection(isovalue);
@@ -1162,7 +1208,7 @@ void mouseMove(int x, int y){
 			glutPostRedisplay();
 		}
 	}
-	else if (dragFocus == 4){
+	else if (dragFocus == DRAG_FOCUS_TREE_1){
 		if (field2 != 0){
 			if (field2->selectionRoot != -1){
 				isovalue = (-0.02 + (1 - (float)y / windowHeight) * 1.04)* field2->MaxHeight();
@@ -1335,24 +1381,33 @@ void key(unsigned char c, int x, int y){
 int main(int argc, char* argv[]){
 
 	slider.SetValueRange(0, 20);
+	slider.SetValue(5);
 	slider.BindValue(&transparencyExponent);
+
+	pruneSlider.SetValueRange(1, 50);
+	pruneSlider.SetValue(10);
+	pruneSlider.BindValue(&pruningThreshold);
+	pruneSlider.BindDirty(&pruningThresholdChanged);
 
 	int nArg = argc - 1;
 	char* argv1[] = { argv[0], argv[1] };
 	field1 = new MyContourTree(nArg, argv1);
 	field1->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
 	field1->LoadLabelTable("GOBS_look_up_table.txt");
+	field1->SetPruningThreshold(pruningThreshold);
 	field1->PruneNoneROIs();
 	field1->ComputeArcNames();
 	field1->SetIsosurface(isovalue);
 	field1->SetNodeXPositionsExt();
 
+	//if (false){
 	if (argc>2){
 		char* argv2[] = { argv[0], argv[2] };
 		MyContourTree f2(nArg, argv2);
 		field2 = new MyContourTree(nArg, argv2);
 		field2->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
 		field2->LoadLabelTable("GOBS_look_up_table.txt");
+		field1->SetPruningThreshold(pruningThreshold);
 		field2->PruneNoneROIs();
 		field2->ComputeArcNames();
 		field2->SetIsosurface(isovalue);

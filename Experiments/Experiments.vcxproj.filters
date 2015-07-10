@@ -234,6 +234,9 @@
     <ClCompile Include="MyContourTree_Layout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MyContourTree_Prune.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">

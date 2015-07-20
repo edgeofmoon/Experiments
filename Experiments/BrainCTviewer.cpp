@@ -15,6 +15,7 @@ using namespace std;
 #include "MyTracks.h"
 #include "MyContourTree.h"
 #include "MySlider.cpp"
+#include "ColorScaleTable.h"
 
 #include "Ric/RicVolume.h"
 #include "Ric/RicMesh.h"
@@ -33,11 +34,16 @@ int eyeIfNonStereo = 0;
 int windowWidth = 2700;
 int windowHeight = 900;
 float zDistance = 1000;
+char defaultByte = 0x02;
 
 MySlider<float> slider;
 MySlider<int> pruneSlider;
 float transparencyExponent = 5;
 int dragFocus = -1;
+int dragOffsetX = 0;
+int dragOffsetY = 0;
+bool isDragging = false;
+int dragStartX, dragStartY;
 
 GLfloat mesh_color[] = { 0.5, 0.3, 0, 1 };
 // CT
@@ -909,6 +915,182 @@ void RenderRay(){
 	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void RenderLegendScientific(float xOffset, float yOffset, float yRange){
+	int minExp = field1->GetMinExponent();
+	int maxExp = field1->GetMaxExponent();
+	float expOffset = field1->GetExponnetScaleOffset();
+	float expScale = field1->GetExponentScaleWidth();
+	float sciScale = field1->GetScientificScaleWidth();
+	float yExpStep = yRange / (maxExp - minExp + 1)/3;
+
+	for (int exp = minExp; exp <= maxExp; exp++){
+		int i = exp - minExp;
+		float height = (exp + expOffset)*expScale*sciScale / 2;
+		float heightNext = (exp + 1 + expOffset)*expScale*sciScale / 2;
+		MyColor4f color = bitmap.GetColor(i / (float)(maxExp - minExp)*(bitmap.GetWidth()-1), 0);
+		MyGraphicsTool::Color(MyColor4f(color.b, color.g, color.r));
+		glBegin(GL_QUADS);
+		glVertex2f(xOffset - height, yOffset + i*yExpStep);
+		glVertex2f(xOffset + height, yOffset + i*yExpStep);
+		glVertex2f(xOffset + height, yOffset + (i + 1)*yExpStep);
+		glVertex2f(xOffset - height, yOffset + (i + 1)*yExpStep);
+		glEnd();
+
+		glColor3f(0, 0, 0);
+		glBegin(GL_LINES);
+		if (exp == minExp){
+			glVertex2f(xOffset - height, yOffset);
+			glVertex2f(xOffset + height, yOffset);
+		}
+		if (exp == maxExp){
+			glVertex2f(xOffset - height, yOffset + yRange/3);
+			glVertex2f(xOffset + height, yOffset + yRange/3);
+		}
+		else{
+			glVertex2f(xOffset - height, yOffset + (i + 1)*yExpStep);
+			glVertex2f(xOffset - heightNext, yOffset + (i + 1)*yExpStep);
+			glVertex2f(xOffset + height, yOffset + (i + 1)*yExpStep);
+			glVertex2f(xOffset + heightNext, yOffset + (i + 1)*yExpStep);
+		}
+		glVertex2f(xOffset - height, yOffset + i*yExpStep);
+		glVertex2f(xOffset - height, yOffset + (i+1)*yExpStep);
+		glVertex2f(xOffset + height, yOffset + i*yExpStep);
+		glVertex2f(xOffset + height, yOffset + (i + 1)*yExpStep);
+		glEnd();
+	}
+	for (int exp = minExp; exp <= maxExp; exp++){
+		int i = exp - minExp;
+		float height = (exp + expOffset)*expScale*sciScale / 2;
+		glRasterPos2f(xOffset + height, yOffset + i*yExpStep);
+		MyString str(exp);
+		glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)str.c_str());
+	}
+	glRasterPos2f(xOffset , yOffset + yRange/3);
+	glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)"Exponent");
+
+	float yMantiStep = yRange / 10 / 3;
+	yOffset += yRange / 2;
+	glColor3f(0, 0, 1);
+	glBegin(GL_LINES);
+	for (int manti = 1; manti <= 10; manti++){
+		int i = manti - 1;
+		float height = manti*sciScale / 2;
+		float heightNext = manti*sciScale / 2;
+		if (manti == 1){
+			glVertex2f(xOffset - height, yOffset);
+			glVertex2f(xOffset + height, yOffset);
+		}
+		if (manti == 10){
+			glVertex2f(xOffset - height, yOffset + yRange/3);
+			glVertex2f(xOffset + height, yOffset + yRange/3);
+		}
+		else{
+			glVertex2f(xOffset - height, yOffset + (i + 1)*yMantiStep);
+			glVertex2f(xOffset - heightNext, yOffset + (i + 1)*yMantiStep);
+			glVertex2f(xOffset + height, yOffset + (i + 1)*yMantiStep);
+			glVertex2f(xOffset + heightNext, yOffset + (i + 1)*yMantiStep);
+		}
+		glVertex2f(xOffset - height, yOffset + i*yMantiStep);
+		glVertex2f(xOffset - height, yOffset + (i + 1)*yMantiStep);
+		glVertex2f(xOffset + height, yOffset + i*yMantiStep);
+		glVertex2f(xOffset + height, yOffset + (i + 1)*yMantiStep);
+	}
+	glEnd();
+	for (int manti = 1; manti <= 10; manti++){
+		int i = manti - 1;
+		float height = manti*sciScale / 2;
+		glRasterPos2f(xOffset + height, yOffset + i*yMantiStep);
+		MyString str(manti);
+		glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)str.c_str());
+	}
+	glRasterPos2f(xOffset, yOffset + yRange / 3);
+	glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)"Mantissa");
+}
+
+
+void RenderLegendScientificOneSided(float xOffset, float yOffset, float yRange){
+	int minExp = field1->GetMinExponent();
+	int maxExp = field1->GetMaxExponent();
+	float expOffset = field1->GetExponnetScaleOffset();
+	float expScale = field1->GetExponentScaleWidth();
+	float sciScale = field1->GetScientificScaleWidth();
+	float yExpStep = yRange / (maxExp - minExp + 1) / 3;
+
+	for (int exp = minExp; exp <= maxExp; exp++){
+		int i = exp - minExp;
+		float height = (exp + expOffset)*expScale*sciScale;
+		float heightNext = (exp + 1 + expOffset)*expScale*sciScale;
+		//float expPos = colorBrewer_sequential_8_singlehue_3[exp-minExp][0] / 255.f;
+
+		glBegin(GL_QUADS);
+		glColor3ubv((const GLubyte*)colorBrewer_sequential_8_multihue_9[exp - minExp]);
+		glVertex2f(xOffset, yOffset + i*yExpStep);
+		glVertex2f(xOffset + height, yOffset + i*yExpStep);
+		glVertex2f(xOffset + heightNext, yOffset + (i + 1)*yExpStep);
+		glVertex2f(xOffset, yOffset + (i + 1)*yExpStep);
+		glEnd();
+
+		glColor3f(0, 0, 0);
+		glBegin(GL_LINES);
+		if (exp == minExp){
+			glVertex2f(xOffset, yOffset);
+			glVertex2f(xOffset, yOffset + yRange / 3);
+
+			glVertex2f(xOffset, yOffset);
+			glVertex2f(xOffset + height, yOffset);
+		}
+		if (exp == maxExp){
+			glVertex2f(xOffset, yOffset + yRange / 3);
+			glVertex2f(xOffset + height, yOffset + yRange / 3);
+		}
+
+		glVertex2f(xOffset + height, yOffset + i*yExpStep);
+		glVertex2f(xOffset + heightNext, yOffset + (i + 1)*yExpStep);
+		glEnd();
+	}
+	for (int exp = minExp; exp <= maxExp; exp++){
+		int i = exp - minExp;
+		float height = (exp + expOffset)*expScale*sciScale;
+		glRasterPos2f(xOffset + (maxExp + expOffset)*expScale*sciScale, yOffset + i*yExpStep);
+		MyString str(exp);
+		glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)str.c_str());
+	}
+	glRasterPos2f(xOffset, yOffset + yRange / 3);
+	glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)"Exponent");
+
+	float yMantiStep = yRange / 10 / 3;
+	yOffset += yRange / 2;
+	glColor3f(0, 0, 1);
+	glBegin(GL_LINES);
+	for (int manti = 1; manti <= 10; manti++){
+		int i = manti - 1;
+		float height = manti*sciScale;
+		float heightNext = manti*sciScale;
+		if (manti == 1){
+			glVertex2f(xOffset, yOffset);
+			glVertex2f(xOffset, yOffset + yRange / 3);
+			glVertex2f(xOffset, yOffset);
+			glVertex2f(xOffset + height, yOffset);
+		}
+		if (manti == 10){
+			glVertex2f(xOffset, yOffset + yRange / 3);
+			glVertex2f(xOffset + height, yOffset + yRange / 3);
+		}
+		glVertex2f(xOffset + height, yOffset + i*yMantiStep);
+		glVertex2f(xOffset + heightNext, yOffset + (i + 1)*yMantiStep);
+	}
+	glEnd();
+	for (int manti = 1; manti <= 10; manti++){
+		int i = manti - 1;
+		float height = manti*sciScale;
+		glRasterPos2f(xOffset + 10 *sciScale, yOffset + i*yMantiStep);
+		MyString str(manti);
+		glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)str.c_str());
+	}
+	glRasterPos2f(xOffset, yOffset + yRange / 3);
+	glutBitmapString(GLUT_BITMAP_HELVETICA_10, (const unsigned char *)"Mantissa");
+}
+
 void display(){
 
 	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
@@ -971,7 +1153,11 @@ void display(){
 		glEnable(GL_LIGHTING);
 		glEnable(GL_LIGHT0);
 		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+		float color1[] = { 0.6, 0, 0, 1 };
+		float color2[] = { 0, 0, 0.6, 1 };
+		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color1);
 		if (bdraw[4]) field1->FlexibleContours(true, false);
+		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color2);
 		if (bdraw[5] && field2!=0) field2->FlexibleContours(true, false);
 		//field->DrawSelectedVoxes(true, false);
 		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
@@ -979,7 +1165,7 @@ void display(){
 		glDisable(GL_LIGHT0);
 		glPopMatrix();
 	}
-	MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 3, 0, windowWidth / 3, windowHeight));
+	MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 3+dragOffsetX, dragOffsetY, windowWidth / 3, windowHeight));
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
@@ -996,6 +1182,8 @@ void display(){
 	}
 
 	//RenderLegend(MyVec2f(- 0.02, -1 / 1.02), MyVec2f(0, 1 / 1.02), field->MinHeight(), field->MaxHeight(), true);
+	/*
+	// linear legend
 	MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 2, 0, windowWidth / 3, windowHeight));
 	//field1->DrawLegend(MyVec2f(0.9, 0), MyVec2f(1, 1));
 	float count = field1->MaxComparedArcWidth();
@@ -1003,6 +1191,10 @@ void display(){
 		count = max(field2->MaxComparedArcWidth(), count);
 	}
 	RenderLegend(0.5, 0.9, count, field1->GetComparedArcScaleWidth(), field1->GetBinWidth());
+	*/
+	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
+	RenderLegendScientificOneSided(0.9, 0, 1);
+
 
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
@@ -1078,11 +1270,11 @@ void updateScaleWidth(){
 	float scaleWidth1 = 0;
 	float scaleWidth2 = 0;
 	if (field1 != 0){
-		scaleWidth1 = field1->SuggestComparedArcWidthScale();
+		scaleWidth1 = field1->SuggestComparedArcWidthScale(defaultByte);
 	}
 	if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
 	if (field2 != 0){
-		scaleWidth2 = field2->SuggestComparedArcWidthScale();
+		scaleWidth2 = field2->SuggestComparedArcWidthScale(defaultByte);
 	}
 	if (scaleWidth2 != 0)scaleWidth = min(scaleWidth, scaleWidth2);
 	if (scaleWidth != 0){
@@ -1099,6 +1291,26 @@ void updateScaleWidth(){
 	}
 }
 
+void updateScaleWidthScientific(){
+	float scaleWidth = 1;
+	float scaleWidth1 = 0;
+	float scaleWidth2 = 0;
+	if (field1 != 0){
+		scaleWidth1 = field1->GetScientificScaleWidth();
+	}
+	if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
+	if (field2 != 0){
+		scaleWidth2 = field2->GetScientificScaleWidth();
+	}
+	if (scaleWidth2 != 0) scaleWidth = min(scaleWidth, scaleWidth2);
+	if (scaleWidth != 0){
+		field1->SetScientificScaleWidth(scaleWidth);
+		if (field2 != 0){
+			field2->SetScientificScaleWidth(scaleWidth);
+		}
+	}
+}
+
 void updatePruning(){
 	//return;
 	if (pruningThresholdChanged){
@@ -1108,7 +1320,7 @@ void updatePruning(){
 			field1->PruneNoneROIs();
 			field1->ComputeArcNames();
 			field1->SetIsosurface(isovalue);
-			field1->SetNodeXPositionsExt();
+			field1->SetNodeXPositionsExt(defaultByte);
 		}
 		if (field2){
 			field2->ClearComparedArcs();
@@ -1116,7 +1328,8 @@ void updatePruning(){
 			field2->PruneNoneROIs();
 			field2->ComputeArcNames();
 			field2->SetIsosurface(isovalue);
-			field2->SetNodeXPositionsExt();
+			field2->SetNodeXPositionsExt(defaultByte);
+			updateScaleWidthScientific();
 		}
 		pruningThresholdChanged = false;
 	}
@@ -1151,8 +1364,14 @@ void mouseKey(int button, int state, int x, int y){
 				selectArcCompare(x - windowWidth / 3, windowHeight - y, field1);
 				field2->CompareArcs(field1);
 				updateScaleWidth();
-				field1->SetNodeXPositionsExt();
-				field2->SetNodeXPositionsExt();
+				field1->SetNodeXPositionsExt(defaultByte);
+				field2->SetNodeXPositionsExt(defaultByte);
+				updateScaleWidthScientific();
+			}
+			else if (button == GLUT_MIDDLE_BUTTON){
+				dragStartX = x;
+				dragStartY = windowHeight - y;
+				isDragging = true;
 			}
 			dragFocus = DRAG_FOCUS_TREE_0;
 		}
@@ -1166,8 +1385,14 @@ void mouseKey(int button, int state, int x, int y){
 					selectArcCompare(x - windowWidth / 3 * 2, windowHeight - y, field2);
 					field1->CompareArcs(field2);
 					updateScaleWidth();
-					field1->SetNodeXPositionsExt();
-					field2->SetNodeXPositionsExt();
+					field1->SetNodeXPositionsExt(defaultByte);
+					field2->SetNodeXPositionsExt(defaultByte);
+					updateScaleWidthScientific();
+				}
+				else if (button == GLUT_MIDDLE_BUTTON){
+					dragStartX = x;
+					dragStartY = windowHeight - y;
+					isDragging = true;
 				}
 			}
 			dragFocus = DRAG_FOCUS_TREE_1;
@@ -1180,6 +1405,7 @@ void mouseKey(int button, int state, int x, int y){
 		}
 		else slider.MouseKey(button, state, x, windowHeight - y);
 		dragFocus = DRAG_FOCUS_NONE;
+		isDragging = false;
 	}
 	glutPostRedisplay();
 }
@@ -1200,7 +1426,15 @@ void mouseMove(int x, int y){
 		}
 		glutPostRedisplay();
 	}
+	else if(isDragging){
+		dragOffsetX += x - dragStartX;
+		dragOffsetY += windowHeight - y - dragStartY;
+		dragStartX = x;
+		dragStartY = windowHeight - y;
+		glutPostRedisplay();
+	}
 	else if (dragFocus == DRAG_FOCUS_TREE_0){
+		
 		if (field1->selectionRoot != -1){
 			isovalue = (-0.02 + (1 - (float)y / windowHeight) * 1.04)* field1->MaxHeight();
 			field1->UpdateSelection(isovalue);
@@ -1398,7 +1632,7 @@ int main(int argc, char* argv[]){
 	field1->PruneNoneROIs();
 	field1->ComputeArcNames();
 	field1->SetIsosurface(isovalue);
-	field1->SetNodeXPositionsExt();
+	field1->SetNodeXPositionsExt(defaultByte);
 
 	//if (false){
 	if (argc>2){
@@ -1411,7 +1645,8 @@ int main(int argc, char* argv[]){
 		field2->PruneNoneROIs();
 		field2->ComputeArcNames();
 		field2->SetIsosurface(isovalue);
-		field2->SetNodeXPositionsExt();
+		field2->SetNodeXPositionsExt(defaultByte);
+		updateScaleWidthScientific();
 	}
 
 	cout << "Loading volumes ..." << endl;

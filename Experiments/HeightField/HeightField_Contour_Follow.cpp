@@ -72,7 +72,7 @@ void HeightField::RenderContour(long arc, bool useDisplayLists, bool pickColours
 	{ // RenderContour()
 	GLubyte pick_colour[3] = { 0, 0, 0};													//	for use picking colours
 //	GLfloat shell_colour[3] = { 0, 0, 0};													//	for use picking colours
-	if (pickColours)																	//	i.e. we want to pick something
+/*	if (pickColours)																	//	i.e. we want to pick something
 		{ // pickColours	
 		pick_colour[0] = arc % 256;														//	chop up into bytes
 		pick_colour[1] = (arc / 256) % 256;
@@ -101,6 +101,7 @@ void HeightField::RenderContour(long arc, bool useDisplayLists, bool pickColours
 			else
 				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, basic_colour);
 		} // not pick colours
+		*/
 	if (useDisplayLists)
 		{ // display lists turned off
 		if (superarcs[arc].CheckFlag(Superarc::isDirty))

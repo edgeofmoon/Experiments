@@ -2,6 +2,7 @@
 #include "RicVolume.h"
 #include "PriorityIndex.h"
 #include "MyBitmap.h"
+#include "ColorScaleTable.h"
 #include <cstring>
 #include <GL/freeglut.h>
 
@@ -245,9 +246,14 @@ MyContourTree::MyContourTree(int argc, char** argv)
 	mMaskVolume.Construct(xDim, yDim, zDim);
 	// for max height equals one to make sure height rendering consistency
 	maxHeight = 1;
-	mScaleWidth = 1;
-	mComparedScaleWidth = 0.1;
+	mLogWidthScale = 1;
+	mLinearWidthScale = 0.01;
+	mScientificWidthScale = 0.1;
+	mExponent_Scale = 0.1;
+	mExponent_Offset = 0;
 	mPruningThreshold = 10;
+	mZoomLevel = 2;
+	mContourTreeAlpha = 1;
 	mSuperArcsBkup = NULL;
 	mSuperNodesBkup = NULL;
 	mSuperArcsBkup = new Superarc[nSuperarcs];
@@ -255,6 +261,9 @@ MyContourTree::MyContourTree(int argc, char** argv)
 	mValidNodes = new long[nSupernodes];
 	mValidArcs = new long[nSuperarcs * 2];
 
+	mDefaultScale = MappingScale_Sci;
+	mAltScale = MappingScale_Linear;
+	mHistogramSide = HistogramSide_Right;
 	BackupTree();
 	//SetNodeXPositionsExt();
 }
@@ -604,7 +613,7 @@ void MyContourTree::LoadLabelTable(char* fileName){
 	}
 }
 
-void MyContourTree::SetNodeXPositionsExt(){
+void MyContourTree::SetNodeXPositionsExt(MappingScale scale){
 	long highestNode = validNodes[0];
 	long lowestNode = validNodes[0];
 	for (long theNodeIndex = 1; theNodeIndex < nValidNodes; theNodeIndex++){
@@ -625,7 +634,24 @@ void MyContourTree::SetNodeXPositionsExt(){
 	cout << "nodes accounted for layout: " << numNodes << endl;
 	//LayoutSubTree2(highestNode, -1, 0, 1);
 	updateArcHistograms();
-	mScaleWidth *= UpdateSubTreeLayout(highestNode, -1, 0, 1);
+	mDefaultScale = scale;
+	switch (scale)
+	{
+	case MyContourTree::MappingScale_Linear:
+		mLinearWidthScale *= UpdateSubTreeLayout(highestNode, -1, 0, 1);
+		cout << "Linear Scale updated: " << mLinearWidthScale << endl;
+		break;
+	case MyContourTree::MappingScale_Sci:
+		mScientificWidthScale *= UpdateSubTreeLayout(highestNode, -1, 0, 1);
+		cout << "Scientific Scale updated: " << mScientificWidthScale << endl;
+		break;
+	case MyContourTree::MappingScale_Log:
+		mLogWidthScale *= UpdateSubTreeLayout(highestNode, -1, 0, 1);
+		cout << "Log Scale updated: " << mLogWidthScale << endl;
+		break;
+	default:
+		break;
+	}
 }
 
 /*
@@ -1845,6 +1871,60 @@ void MyContourTree::DrawArcHistogram(long arc){
 }
 */
 
+
+void MyContourTree::GetArcBottomPos(long arc, float& x, float& y){
+	long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+	if (supernodesExt[topNode].numLeaves <= supernodesExt[bottomNode].numLeaves){
+		x = supernodes[topNode].xPosn;
+	}
+	else{
+		x = supernodes[bottomNode].xPosn;
+	}
+
+	y = min(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
+}
+
+void MyContourTree::DrawArcHistogramAt(long arc, float x, float y, float scaleX, float scaleY){
+	float histx, histy;
+	GetArcBottomPos(arc, histx, histy);
+	glPushMatrix();
+	glTranslatef(x, y, 0);
+	glScalef(scaleX, scaleY, 1);
+	glTranslatef(-histx, -histy, 0);
+	if (GetArcScale(arc) == MappingScale_Sci){
+		DrawArcHistogramScientific(arc);
+	}
+	else{
+		DrawArcHistogram(arc);
+	}
+	glPopMatrix();
+}
+
+void MyContourTree::DrawArcSnappingPoint(long arc){
+	map<long, char>::const_iterator it = mArcStatus.find(arc);
+	if (it != mArcStatus.end()){
+		char arcStatus = it->second;
+		if (arcStatus & ArcStatus_SnapAnchoring){
+			float anchorX, anchorY;
+			GetArcSnapPosition(arc, anchorX, anchorY);
+			glPointSize(30);
+			glBegin(GL_POINTS);
+			glColor4f(0, 1, 0, 1);
+			glVertex2f(anchorX, anchorY);
+			glEnd();
+		}
+		else if (arcStatus & ArcStatus_InSnapping){
+			float anchorX, anchorY;
+			GetArcSnapPosition(arc, anchorX, anchorY);
+			glPointSize(20);
+			glBegin(GL_POINTS);
+			glColor4f(1, 0, 0, 1);
+			glVertex2f(anchorX, anchorY);
+			glEnd();
+		}
+	}
+}
+
 void MyContourTree::DrawArcHistogram(long arc){
 	vector<float>& histogram = mArcHistogram[arc];
 	if (histogram.empty()) return;
@@ -1861,62 +1941,196 @@ void MyContourTree::DrawArcHistogram(long arc){
 	float yEnd = max(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
 	float yStep = (yEnd - yStart) / histogram.size();
 
-	char compareByte = mArcCompared[arc];
-	if (compareByte != 0){
+	MappingScale arcScale = GetArcScale(arc);
+	float arcZoom = GetArcZoomLevel(arc);
+	if (IsArcCompared(arc)){
 		glLineWidth(2);
 	}
 	else{
 		glLineWidth(1);
 	}
-	float scaleWidth = mScaleWidth;
+
+	float leftHeightScale;
+	float rightHeightScale;
+	switch (mHistogramSide){
+	case HistogramSide_Sym:
+		leftHeightScale = 0.5;
+		rightHeightScale = 0.5;
+		break;
+	case HistogramSide_Left:
+		leftHeightScale = 1;
+		rightHeightScale = 0;
+		break;
+	case HistogramSide_Right:
+		leftHeightScale = 0;
+		rightHeightScale = 1;
+		break;
+	}
+	glDepthFunc(GL_ALWAYS);
+	float maxBaseHeight = GetDrawingHeight(mMaxHistogramCount, mDefaultScale);
 	for (int i = 0; i < histogram.size(); i++){
-		float height = GetDrawingHeight(histogram[i], compareByte) / 2;
-		float heightNext = GetDrawingHeight(i == histogram.size() - 1 ? histogram[i]:histogram[i + 1], compareByte) / 2;
-		float posY = yStart + i*yStep;
-		MyColor4f color1 = colorMap->GetColor(posY*colorMap->GetWidth(), 0);
-		MyColor4f color2 = colorMap->GetColor(posY*colorMap->GetWidth(), 0);
-
+		float baseHeight = GetDrawingHeight(histogram[i], arcScale);
+		float leftHeight = baseHeight * leftHeightScale*arcZoom;
+		float rightHeight = baseHeight * rightHeightScale*arcZoom;
 		glBegin(GL_QUADS);
-		glColor3f(color1.b, color1.g, color1.r);
-		glVertex2f(xPos + height, yStart + i*yStep);
-		glColor3f(color2.b, color2.g, color2.r);
-		glVertex2f(xPos + heightNext, yStart + (i + 1)*yStep);
-		glVertex2f(xPos - heightNext, yStart + (i + 1)*yStep);
-		glColor3f(color1.b, color1.g, color1.r);
-		glVertex2f(xPos - height, yStart + i*yStep);
+		//float color = 1 - baseHeight / maxBaseHeight;
+		//float color = 0.5;
+		//glColor4f(color, color, color, mContourTreeAlpha);
+		int color = GetDrawingHeight(histogram[i], mDefaultScale)
+			/ GetDrawingHeight(mMaxHistogramCount, mDefaultScale) * 7+0.5;
+		//float color = 0.5;
+		glColor4f(colorBrewer_sequential_8_multihue_9[color][0] / 255.f,
+			colorBrewer_sequential_8_multihue_9[color][1] / 255.f,
+			colorBrewer_sequential_8_multihue_9[color][2] / 255.f, mContourTreeAlpha);
+		glVertex2f(xPos - leftHeight, yStart + i*yStep);
+		glVertex2f(xPos + rightHeight, yStart + i*yStep);
+		glVertex2f(xPos + rightHeight, yStart + (i + 1)*yStep);
+		glVertex2f(xPos - leftHeight, yStart + (i + 1)*yStep);
 		glEnd();
-		
-		if (compareByte == 0){
-			glColor4f(0, 0, 0, 0.8);
-		}
-		else{
-			glColor4f(1, 0, 0, 0.8);
-		}
+
+		glColor4f(0, 0, 0, mContourTreeAlpha);
 		glBegin(GL_LINES);
-		glVertex2f(xPos + height, yStart + i*yStep);
-		glVertex2f(xPos + heightNext, yStart + (i + 1)*yStep);
-
-		glVertex2f(xPos - height, yStart + i*yStep);
-		glVertex2f(xPos - heightNext, yStart + (i + 1)*yStep);
-
 		if (i == 0){
-			glVertex2f(xPos + height, yStart);
-			glVertex2f(xPos - height, yStart);
+			glVertex2f(xPos - leftHeight, yStart );
+			glVertex2f(xPos + rightHeight, yStart);
 		}
 		if (i == histogram.size() - 1){
-			glVertex2f(xPos + height, yEnd);
-			glVertex2f(xPos - height, yEnd);
+			glVertex2f(xPos - leftHeight, yEnd);
+			glVertex2f(xPos + rightHeight, yEnd);
 		}
 		else{
-			glVertex2f(xPos + height, yStart + i*yStep);
-			glVertex2f(xPos + heightNext, yStart + (i + 1)*yStep);
-
-			glVertex2f(xPos - height, yStart + i*yStep);
-			glVertex2f(xPos - heightNext, yStart + (i + 1)*yStep);
+			float baseHeightNext = GetDrawingHeight(histogram[i+1], arcScale);
+			float leftHeightNext = baseHeightNext * leftHeightScale*arcZoom;
+			float rightHeightNext = baseHeightNext * rightHeightScale*arcZoom;
+			glVertex2f(xPos - leftHeight, yStart + (i + 1)*yStep);
+			glVertex2f(xPos - leftHeightNext, yStart + (i + 1)*yStep);
+			glVertex2f(xPos + rightHeight, yStart + (i + 1)*yStep);
+			glVertex2f(xPos + rightHeightNext, yStart + (i + 1)*yStep);
 		}
+		glVertex2f(xPos - leftHeight, yStart + i*yStep);
+		glVertex2f(xPos - leftHeight, yStart + (i + 1)*yStep);
+		glVertex2f(xPos + rightHeight, yStart + i*yStep);
+		glVertex2f(xPos + rightHeight, yStart + (i + 1)*yStep);
+		glEnd();
+	}
+	glDepthFunc(GL_LESS);
+}
+
+void MyContourTree::DrawArcHistogramScientific(long arc){
+	vector<float>& histogram = mArcHistogram[arc];
+	if (histogram.empty()) return;
+	long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+	float xPos;
+	if (supernodesExt[topNode].numLeaves <= supernodesExt[bottomNode].numLeaves){
+		xPos = supernodes[topNode].xPosn;
+	}
+	else{
+		xPos = supernodes[bottomNode].xPosn;
+	}
+
+	float yStart = min(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
+	float yEnd = max(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
+	float yStep = (yEnd - yStart) / histogram.size();
+
+	MappingScale arcScale = GetArcScale(arc);
+	float arcZoom = GetArcZoomLevel(arc);
+	if (IsArcCompared(arc)){
+		glLineWidth(2);
+	}
+	else{
+		glLineWidth(1);
+	}
+	float leftHeightScale;
+	float rightHeightScale;
+	switch (mHistogramSide){
+	case HistogramSide_Sym:
+		leftHeightScale = 0.5;
+		rightHeightScale = 0.5;
+		break;
+	case HistogramSide_Left:
+		leftHeightScale = 1;
+		rightHeightScale = 0;
+		break;
+	case HistogramSide_Right:
+		leftHeightScale = 0;
+		rightHeightScale = 1;
+		break;
+	}
+	vector<float> exponentHeights(histogram.size());
+	vector<float> mantissaHeights(histogram.size());
+	vector<int> exponentPos(histogram.size());
+	float exponentRange = mMaxExponent - mMinExponent;
+	for (int i = 0; i < histogram.size(); i++){
+		float exponentHeight;
+		float mantissaHeight;
+		GetDrawingHeightScientific(histogram[i], exponentHeight, mantissaHeight);
+		exponentHeights[i] = exponentHeight*arcZoom;
+		mantissaHeights[i] = mantissaHeight*arcZoom;
+		if (exponentRange != 0){
+			int exponent;
+			float mantissa;
+			floatToScientific(histogram[i], exponent, mantissa);
+			exponentPos[i] = (exponent - mMinExponent)/exponentRange*7+0.5;
+		}
+		else{
+			exponentPos[i] = 0;
+		}
+	}
+
+	glDepthFunc(GL_ALWAYS);
+	for (int i = 0; i < histogram.size(); i++){
+		float expHeight = exponentHeights[i];
+		float expHeightNext = (i == histogram.size() - 1 ? exponentHeights[i] : exponentHeights[i + 1]);
+		float posY = yStart + i*yStep;
+
+		glBegin(GL_QUADS);
+		//glColor3ubv((const GLubyte*)colorBrewer_sequential_8_multihue_9[exponentPos[i]]);
+		glColor4f(colorBrewer_sequential_8_multihue_9[exponentPos[i]][0] / 255.f,
+			colorBrewer_sequential_8_multihue_9[exponentPos[i]][1] / 255.f,
+			colorBrewer_sequential_8_multihue_9[exponentPos[i]][2] / 255.f, mContourTreeAlpha);
+		glVertex2f(xPos - expHeight*leftHeightScale, yStart + i*yStep);
+		glVertex2f(xPos + expHeight*rightHeightScale, yStart + i*yStep);
+		glVertex2f(xPos + expHeightNext*rightHeightScale, yStart + (i + 1)*yStep);
+		glVertex2f(xPos - expHeightNext*leftHeightScale, yStart + (i + 1)*yStep);
 		glEnd();
 
+
+		glBegin(GL_LINES);
+		// exponent part
+		glColor4f(0, 0, 0, mContourTreeAlpha);
+		glVertex2f(xPos + expHeight*rightHeightScale, yStart + i*yStep);
+		glVertex2f(xPos + expHeightNext*rightHeightScale, yStart + (i + 1)*yStep);
+		glVertex2f(xPos - expHeight*leftHeightScale, yStart + i*yStep);
+		glVertex2f(xPos - expHeightNext*leftHeightScale, yStart + (i + 1)*yStep);
+		if (i == 0){
+			glVertex2f(xPos + expHeight*rightHeightScale, yStart);
+			glVertex2f(xPos - expHeightNext*leftHeightScale, yStart);
+		}
+		if (i == histogram.size() - 1){
+			glVertex2f(xPos + expHeight*rightHeightScale, yEnd);
+			glVertex2f(xPos - expHeightNext*leftHeightScale, yEnd);
+		}
+
+		// mantissa part
+		float mantissaHeight = mantissaHeights[i];
+		float mantHeightNext = (i == histogram.size() - 1 ? mantissaHeights[i] : mantissaHeights[i + 1]);
+		glColor4f(0, 0, 1, mContourTreeAlpha);
+		glVertex2f(xPos + mantissaHeight*rightHeightScale, yStart + i*yStep);
+		glVertex2f(xPos + mantHeightNext*rightHeightScale, yStart + (i + 1)*yStep);
+		glVertex2f(xPos - mantissaHeight*leftHeightScale, yStart + i*yStep);
+		glVertex2f(xPos - mantHeightNext*leftHeightScale, yStart + (i + 1)*yStep);
+
+		if (i == 0){
+			glVertex2f(xPos + mantissaHeight*rightHeightScale, yStart);
+			glVertex2f(xPos - mantissaHeight*leftHeightScale, yStart);
+		}
+		if (i == histogram.size() - 1){
+			glVertex2f(xPos + mantissaHeight*rightHeightScale, yEnd);
+			glVertex2f(xPos - mantissaHeight*leftHeightScale, yEnd);
+		}
+		glEnd();
 	}
+	glDepthFunc(GL_LESS);
 }
 
 void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the contour tree
@@ -1927,11 +2141,10 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 	float xDiff, xHeight;
 	long x, y, z;
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	/*
 	// draw compared arc highlight
-	for (std::map<long, char>::const_iterator it = mArcCompared.begin();
-		it != mArcCompared.end(); ++it){
+	for (std::map<long, char>::const_iterator it = mArcStatus.begin();
+		it != mArcStatus.end(); ++it){
 		long ctArc = it->first;
 		if (IsArcCompared(ctArc)){
 			vector<float>& histogram = mArcHistogram[ctArc];
@@ -1944,7 +2157,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 			else{
 				xPos = supernodes[bottomNode].xPosn;
 			}
-			float height = GetDrawingHeight(*max_element(histogram.begin(),histogram.end()), mArcCompared[ctArc]) / 2;
+			float height = GetDrawingHeight(*max_element(histogram.begin(), histogram.end()), GetArcScale(ctArc)) / 2;
 
 			float yStart = min(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
 			float yEnd = max(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
@@ -1962,17 +2175,22 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 			glEnd();
 		}
 	}
+	*/
 
-	glDepthFunc(GL_ALWAYS);
-	GLfloat edge_colour[4] = { 0.0, 0.0, 0.0, 1.0 };						//	colour for edges if not coloured	
+	GLfloat edge_colour[4] = { 0.0, 0.0, 0.0, mContourTreeAlpha };						//	colour for edges if not coloured	
 
 	for (whichArc = 0; whichArc < nValidArcs; whichArc++){
 		arc = valid[whichArc];
-		DrawArcHistogram(arc);
+		//DrawArcHistogram(arc);
+		if (GetArcScale(arc) == MappingScale_Sci){
+			DrawArcHistogramScientific(arc);
+		}
+		else{
+			DrawArcHistogram(arc);
+		}
 	}
-	glDisable(GL_BLEND);
 
-	glColor3fv(edge_colour);															//	set the colour for nodes and arcs
+	glColor4fv(edge_colour);															//	set the colour for nodes and arcs
 	glLineWidth(1.0);
 	glBegin(GL_LINES);																	//	we will generate a bunch of lines
 
@@ -2016,7 +2234,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 				for (int i = 0; i < name.size(); i++){
 					length += glutBitmapWidth(GLUT_BITMAP_TIMES_ROMAN_10, name[i]);
 				}
-				glColor3f(0, 0, 0);
+				glColor4f(0, 0, 0, mContourTreeAlpha);
 				glRasterPos2f(supernodes[topNode].xPosn - length / 2 * pixelWidth, supernodes[topNode].yPosn + cutSize);
 				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)name.c_str());
 			}
@@ -2025,7 +2243,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 				for (int i = 0; i < name.size(); i++){
 					length += glutBitmapWidth(GLUT_BITMAP_TIMES_ROMAN_10, name[i]);
 				}
-				glColor3f(0, 0, 0);
+				glColor4f(0, 0, 0, mContourTreeAlpha);
 				glRasterPos2f(supernodes[bottomNode].xPosn - length / 2 * pixelWidth, supernodes[bottomNode].yPosn + cutSize);
 				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)name.c_str());
 			}
@@ -2039,6 +2257,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 	glPointSize(5.0);																	//	use a point radius of 5
 	glBegin(GL_POINTS);																	//	now draw some points
 
+	glColor4f(0, 0, 0, mContourTreeAlpha);
 	for (int whichNode = 0; whichNode < nValidNodes; whichNode++)								//	walk through the nodes
 	{ // for each node
 		int node = validNodes[whichNode];													//	grab an active node from the list
@@ -2060,9 +2279,11 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 		xHeight = (*(supernodes[topNode].value) - *(supernodes[bottomNode].value));				//	compute the x-height
 
 		if (differentColouredContours)
-			glColor3fv(surface_colour[superarcs[arc].colour]);
+			//glColor3fv(surface_colour[superarcs[arc].colour]);
+			glColor4f(surface_colour[superarcs[arc].colour][0], surface_colour[superarcs[arc].colour][0],
+			surface_colour[superarcs[arc].colour][0], mContourTreeAlpha);
 		else
-			glColor3fv(basic_colour);													//	set the colour for this contour
+			glColor4f(basic_colour[0], basic_colour[0], basic_colour[0], mContourTreeAlpha);			//	set the colour for this contour
 		//float xPosn = supernodes[bottomNode].xPosn + xDiff * (superarcs[arc].seedValue - *(supernodes[bottomNode].value)) / xHeight;
 		float xPosn;
 		if (supernodesExt[topNode].numLeaves <= supernodesExt[bottomNode].numLeaves){
@@ -2074,7 +2295,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 			xPosn = supernodes[bottomNode].xPosn;
 		}
 		//	compute x position
-		glColor3f(1, 0.5, 0.5);
+		glColor4f(1, 0.5, 0.5, mContourTreeAlpha);
 		glVertex2f(xPosn - 2 * cutSize, superarcs[arc].seedValue - 2 * heightUnit);
 		glVertex2f(xPosn + 2 * cutSize, superarcs[arc].seedValue - 2 * heightUnit);
 		glVertex2f(xPosn + 2 * cutSize, superarcs[arc].seedValue + 2 * heightUnit);
@@ -2103,7 +2324,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 			xPosn = supernodes[bottomNode].xPosn;
 		}
 		//	compute x position
-		glColor3f(1, 0.5, 0.5);
+		glColor4f(1, 0.5, 0.5, mContourTreeAlpha);
 		glVertex2f(xPosn - 3*cutSize, currentSelectionValue - 3 * heightUnit);
 		glVertex2f(xPosn + 3*cutSize, currentSelectionValue - 3 * heightUnit);
 		glVertex2f(xPosn + 3*cutSize, currentSelectionValue + 3 * heightUnit);
@@ -2111,6 +2332,11 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 	} // loop through superarcs
 
 	glEnd();																			//	end the set of quads
+
+	for (whichArc = 0; whichArc < nValidArcs; whichArc++){
+		arc = valid[whichArc];
+		DrawArcSnappingPoint(arc);
+	}
 
 	glDepthFunc(GL_LESS);
 } // DrawPlanarContourTree()

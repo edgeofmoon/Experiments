@@ -53,10 +53,10 @@ void MyContourTree::MarkSelectedVoxes(){
 	} // for theArc
 	for (theArc = 0; theArc < nSelectedArcs; theArc++)
 	{ // for theArc
-		if (superarcs[active[theArc]].CheckFlag(Superarc::isSelected))
-			MarkSelectedArcVoxes(active[theArc], currentSelectionValue);
+		if (superarcs[selected[theArc]].CheckFlag(Superarc::isSelected))
+			MarkSelectedArcVoxes(selected[theArc], currentSelectionValue);
 		else
-			MarkSelectedArcVoxes(active[theArc], superarcs[active[theArc]].seedValue);
+			MarkSelectedArcVoxes(selected[theArc], superarcs[selected[theArc]].seedValue);
 	} // for theArc
 
 	// update the volume too
@@ -68,8 +68,8 @@ void MyContourTree::VolumeRenderingSelectedVoxes(int winWidth, int winHeight){
 	// cube
 	glBindFramebuffer(GL_FRAMEBUFFER, cubeFrameBuffer.frameBuffer);
 	glEnable(GL_CULL_FACE);
-	glClearColor(0.5, 0.5, 0.5, 0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glClearColor(0.5, 0.5, 0.5, 0);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glCullFace(GL_FRONT);
 	glUseProgram(cubeProgram);
@@ -89,6 +89,7 @@ void MyContourTree::VolumeRenderingSelectedVoxes(int winWidth, int winHeight){
 	glUseProgram(0);
 
 	glDisable(GL_CULL_FACE);
+	//return;
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	// render ray
@@ -324,4 +325,20 @@ void MyContourTree::ReCompileShaders(){
 		glDeleteProgram(cubeProgram);
 	}
 	cubeProgram = InitShader("coord.vert", "coord.frag", "fragColour");
+}
+
+
+void MyContourTree::ShowSelectedVoxes(){
+	for (long i = 0; i < mMaskVolume.XDim(); i++){
+		for (long j = 0; j < mMaskVolume.YDim(); j++){
+			for (long k = 0; k < mMaskVolume.ZDim(); k++){
+				if (mMaskVolume(i,j,k)>0.5){
+					glPushMatrix();
+					glTranslatef(i, j, k);
+					glutSolidCube(1);
+					glPopMatrix();
+				}
+			}
+		}
+	}
 }

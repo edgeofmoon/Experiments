@@ -225,7 +225,7 @@ void main() {
 		vec3 loc2 = vec3(loc.x,1-loc.y,loc.z);
 		float density = texture(densityVol, loc2).r;
 		float attri = texture(attriVol, loc2).r;
-		if(density>thresLow ){
+		if(density>thresLow && attri>0.2){
 			//vec3 color = GetLightedColor(loc, fragPos+eyeDir*accDistance, density).xyz;
 			vec3 color = GetLightedColor(loc2, fragPos+eyeDir*accDistance, attri).xyz;
 			accColor = color;

@@ -74,7 +74,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;</IncludePath>
+    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;$(IncludePath)</IncludePath>
     <SourcePath>./Ric;./HeightField;$(SourcePath)</SourcePath>
     <LibraryPath>C:\Program Files (x86)\VTK\$(Configuration)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -86,7 +86,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;</IncludePath>
+    <IncludePath>./HeightField;./Ric;C:\Program Files (x86)\VTK\include\vtk-6.2;$(IncludePath)</IncludePath>
     <SourcePath>./Ric;./HeightField;$(SourcePath)</SourcePath>
     <LibraryPath>C:\Program Files (x86)\VTK\$(Configuration)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -168,7 +168,12 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="ctGui_Viewer.cpp" />
+    <ClCompile Include="ctGui_Viewer.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="CT_MSC.cpp" />
     <ClCompile Include="glui_viewer.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
@@ -246,6 +251,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="MySpaceFillingNaive.cpp" />
     <ClCompile Include="MyString.cpp" />
     <ClCompile Include="MyTrackBall.cpp" />
     <ClCompile Include="MyTracks.cpp" />
@@ -333,6 +339,7 @@
     <ClInclude Include="MyPrimitiveDrawer.h" />
     <ClInclude Include="MyQuarternion.h" />
     <ClInclude Include="MySlider.h" />
+    <ClInclude Include="MySpaceFillingNaive.h" />
     <ClInclude Include="MyString.h" />
     <ClInclude Include="MyTrackBall.h" />
     <ClInclude Include="MyTracks.h" />
@@ -370,6 +377,8 @@
   <ItemGroup>
     <None Include="coord.frag" />
     <None Include="coord.vert" />
+    <None Include="fisheye.frag" />
+    <None Include="fisheye.vert" />
     <None Include="mesh.frag" />
     <None Include="mesh.vert" />
     <None Include="plane.frag" />
@@ -378,6 +387,8 @@
     <None Include="raycasting.vert" />
     <None Include="selVol.frag" />
     <None Include="selVol.vert" />
+    <None Include="tube.frag" />
+    <None Include="tube.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

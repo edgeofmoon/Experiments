@@ -18,7 +18,6 @@ out vec4 fragColour;
 void main() {
 	
 	float value = texture(densityVol, vec3(rawPos.xy,1-rawPos.z)).r;
-	if(value<0.01) discard;
 	vec2 texCoord = vec2(gl_FragCoord.x/windowWidth, gl_FragCoord.y/windowHeight);
 	float meshDepth = texture(meshDepthTex, texCoord).r;
 	vec4 meshColor = texture(meshColorTex, texCoord);
@@ -31,8 +30,8 @@ void main() {
 	|| (meshColor1.r<0.1 && meshColor1.g<0.1)
 	|| (meshColor2.r<0.1 && meshColor2.g<0.1)
 	|| (meshColor3.r<0.1 && meshColor3.g<0.1))){
-		//fragColour = vec4(value,value,value,1);
-		fragColour = texture(colorMap, vec2(value,0.5));
+		fragColour = vec4(value,value,value,1);
+		//fragColour = texture(colorMap, vec2(value,0.5));
 	}
 	else{
 		discard;

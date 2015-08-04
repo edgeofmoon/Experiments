@@ -5,6 +5,9 @@
 #include <vector>
 
 #include "RicPoint.h"
+#include "MyArray.h"
+#include "MyColor4.h"
+#include "Array3D.h"
 
 class MySingleTrackData
 {
@@ -18,6 +21,7 @@ public:
 class MyTracks
 {
 public:
+
 	MyTracks();
 
 	MyTracks(const std::string& filename);
@@ -33,6 +37,8 @@ public:
 	int GetNumVertex(int trackIdx) const;
 	
 	Point GetPoint(int trackIdx, int pointIdx) const;
+	MyVec3f GetCoord(int trackIdx, int pointIdx) const;
+
 
 protected:
 	struct MyTrackHeader
@@ -63,6 +69,59 @@ protected:
 	} mHeader;
 	
 	std::vector<MySingleTrackData> mTracks;
+
+public:
+	enum TrackShape{
+		TRACK_SHAPE_LINE = 1,
+		TRACK_SHAPE_TUBE = 2
+	};
+
+protected:
+	TrackShape mShape;
+	// for geometry
+	int mFaces;
+	MyArray3f mVertices;
+	MyArray3f mNormals;
+	MyArray2f mTexCoords;
+	MyArrayf mRadius;
+	MyArray<MyColor4f> mColors;
+	MyArray3i mIndices;
+	MyArrayi mLineIndices;
+	MyArrayi mIdxOffset;
+
+	// for shader
+	unsigned int mShaderProgram;
+	unsigned int mVertexArray;
+	unsigned int mVertexBuffer;
+	unsigned int mNormalBuffer;
+	unsigned int mTexCoordBuffer;
+	unsigned int mRadiusBuffer;
+	unsigned int mColorBuffer;
+	unsigned int mIndexBuffer;
+	bool mbScreenSpace;
+
+	int mTexUniform;
+	int mNormalAttribute;
+	int mPositionAttribute;
+	int mTexCoordAttribute;
+	int mRadiusAttribute;
+	int mColorAttribute;
+
+	void ComputeTubeGeometry();
+	void ComputeLineGeometry();
+public:
+	void ComputeGeometry();
+	void LoadGeometry();
+	void LoadShader();
+	void Show();
+	void SetShape(TrackShape shape){ mShape = shape; };
+
+// for filtering
+protected:
+	MyArrayi mFiberToDraw;
+public:
+	void GetVoxelIndex(const MyVec3f vertex, long &x, long &y, long &z) const;
+	void FilterByVolumeMask(Array3D<float>& mask);
 };
 	
 

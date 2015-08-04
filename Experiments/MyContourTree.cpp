@@ -3,6 +3,8 @@
 #include "PriorityIndex.h"
 #include "MyBitmap.h"
 #include "ColorScaleTable.h"
+#include "MySpaceFillingNaive.h"
+#include "MyPrimitiveDrawer.h"
 #include <cstring>
 #include <GL/freeglut.h>
 
@@ -256,7 +258,7 @@ MyContourTree::MyContourTree(int argc, char** argv)
 	mContourTreeAlpha = 1;
 	mSuperArcsBkup = NULL;
 	mSuperNodesBkup = NULL;
-	mSuperArcsBkup = new Superarc[nSuperarcs];
+	mSuperArcsBkup = new Superarc[2 * nSuperarcs];
 	mSuperNodesBkup = new Supernode[nSupernodes];
 	mValidNodes = new long[nSupernodes];
 	mValidArcs = new long[nSuperarcs * 2];
@@ -2133,6 +2135,132 @@ void MyContourTree::DrawArcHistogramScientific(long arc){
 	glDepthFunc(GL_LESS);
 }
 
+void MyContourTree::DrawContourTreeFrame(){
+	float boarder_x = 0.035;
+	glColor4f(0, 0, 0, mContourTreeAlpha);
+	glBegin(GL_LINE_LOOP);
+	glVertex2f(-boarder_x, 0);
+	glVertex2f(1 + boarder_x, 0);
+	glVertex2f(1 + boarder_x, 1);
+	glVertex2f(-boarder_x, 1);
+	glEnd();
+
+	glBegin(GL_LINES);
+	for (int i = 1; i <= 49; i++){
+		float height = i*0.02;
+		if (i % 5 == 0){
+			glColor4f(0.5, 0.5, 0.5, mContourTreeAlpha);
+			glLineWidth(2);
+		}
+		else{
+			glColor4f(0.8, 0.8, 0.8, mContourTreeAlpha);
+			glLineWidth(0.5);
+		}
+		glVertex2f(-boarder_x, height);
+		glVertex2f(1 + boarder_x, height);
+	}
+	glEnd();
+
+	glColor4f(0, 0, 0, mContourTreeAlpha);
+	for (int i = 0; i <= 10; i++){
+		glRasterPos2f(-boarder_x-0.015, i*0.1);
+		string str = to_string(i*0.1);
+		str.resize(3);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)str.c_str());
+	}
+}
+
+void MyContourTree::DrawArcLabels(){
+	float cutSize = 0.005;																//	relative length of cuts
+	int viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	float pixelWidth = 1.f / viewport[2];
+	for (long whichArc = 0; whichArc < nValidArcs; whichArc++)										//	walk through the array from low to high
+	{ // loop through superarcs
+		long arc = valid[whichArc];															//	grab an edge from the list
+		long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;					//	grab the two ends
+
+		// draw label
+		if (mLabelVolume){
+			string name = mArcName[arc];
+			if (supernodes[topNode].IsLowerLeaf() || supernodes[topNode].IsUpperLeaf()){
+				float length = 0;
+				for (int i = 0; i < name.size(); i++){
+					length += glutBitmapWidth(GLUT_BITMAP_TIMES_ROMAN_24, name[i]);
+				}
+				glColor4f(0, 0, 0, mContourTreeAlpha);
+				glRasterPos2f(supernodes[topNode].xPosn - length / 2 * pixelWidth, supernodes[topNode].yPosn + cutSize);
+				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)name.c_str());
+			}
+			else if (supernodes[bottomNode].IsLowerLeaf() || supernodes[bottomNode].IsUpperLeaf()){
+				float length = 0;
+				for (int i = 0; i < name.size(); i++){
+					length += glutBitmapWidth(GLUT_BITMAP_TIMES_ROMAN_24, name[i]);
+				}
+				glColor4f(0, 0, 0, mContourTreeAlpha);
+				glRasterPos2f(supernodes[bottomNode].xPosn - length / 2 * pixelWidth, supernodes[bottomNode].yPosn + cutSize);
+				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)name.c_str());
+			}
+			else{
+				//glRasterPos2f(supernodes[bottomNode].xPosn + cutSize, 
+				//	(supernodes[bottomNode].yPosn + supernodes[topNode].yPosn)/2);
+			}
+		}
+	} // loop through superarcs
+	float pixelHeight = 1.f / (viewport[3] / 2);
+	glColor4f(0, 0, 0, mContourTreeAlpha);
+	glRasterPos2f(0.01, 1.02);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
+	glRasterPos2f(0.01 + pixelWidth / 2, 1.02 + pixelHeight / 2);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
+	glRasterPos2f(0.01 - pixelWidth / 2, 1.02 - pixelHeight / 2);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
+}
+
+void MyContourTree::DrawArcLabelsUnoccluded(){
+	float cutSize = 0.005;																//	relative length of cuts
+	int viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	float pixelWidth = 1.f / viewport[2];
+	float pixelHeight = 1.f / (viewport[3]/2);
+	MySpaceFillingNaive spaceFill;
+	void * font = GLUT_BITMAP_HELVETICA_18;
+	//void * font = GLUT_BITMAP_TIMES_ROMAN_24;
+	for (long whichArc = 0; whichArc < nValidArcs; whichArc++)										//	walk through the array from low to high
+	{ // loop through superarcs
+		long arc = valid[whichArc];															//	grab an edge from the list
+		long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;					//	grab the two ends
+
+		// draw label
+		if (mLabelVolume){
+			string name = mArcName[arc];
+			if (supernodes[topNode].IsLowerLeaf() || supernodes[topNode].IsUpperLeaf()){
+				float length = 0;
+				for (int i = 0; i < name.size(); i++){
+					length += glutBitmapWidth(font, name[i]);
+				}
+				glColor4f(0, 0, 0, mContourTreeAlpha);
+				MyVec2f lowPos(supernodes[topNode].xPosn - length / 2 * pixelWidth, supernodes[topNode].yPosn + cutSize);
+				MyVec2f highPos = lowPos + MyVec2f(length * pixelWidth, glutBitmapHeight(font)*pixelHeight);
+				MyBox2f box = spaceFill.PushBoxFromTop(MyBox2f(lowPos, highPos), 0.0001);
+				glRasterPos2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+				glutBitmapString(font, (const unsigned char*)name.c_str());
+				MyPrimitiveDrawer::DrawLineAt(MyVec2f(supernodes[topNode].xPosn , supernodes[topNode].yPosn ), box.GetLowPos());
+			}
+			else if (supernodes[bottomNode].IsLowerLeaf() || supernodes[bottomNode].IsUpperLeaf()){
+			}
+		}
+	}
+
+	glColor4f(0, 0, 0, mContourTreeAlpha);
+	glRasterPos2f(0.01, 1.02);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
+	glRasterPos2f(0.01 + pixelWidth / 2, 1.02 + pixelHeight / 2);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
+	glRasterPos2f(0.01 - pixelWidth / 2, 1.02 - pixelHeight / 2);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
+}
+
 void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the contour tree
 { // DrawPlanarContourTree()
 	float heightUnit = (MaxHeight() - MinHeight()) * 0.001;									//	compute unit of height for scaling
@@ -2176,7 +2304,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 		}
 	}
 	*/
-
+	DrawContourTreeFrame();
 	GLfloat edge_colour[4] = { 0.0, 0.0, 0.0, mContourTreeAlpha };						//	colour for edges if not coloured	
 
 	for (whichArc = 0; whichArc < nValidArcs; whichArc++){
@@ -2217,42 +2345,10 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 	glEnd();																			//	end the set of lines
 	glLineWidth(1.0);
 
+	glDepthFunc(GL_ALWAYS);
 	// draw label
-	int viewport[4];
-	glGetIntegerv(GL_VIEWPORT, viewport);
-	float pixelWidth = 1.f / viewport[2];
-	for (whichArc = 0; whichArc < nValidArcs; whichArc++)										//	walk through the array from low to high
-	{ // loop through superarcs
-		arc = valid[whichArc];															//	grab an edge from the list
-		long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;					//	grab the two ends
-
-		// draw label
-		if (mLabelVolume){
-			string name = mArcName[arc];
-			if (supernodes[topNode].IsLowerLeaf() || supernodes[topNode].IsUpperLeaf()){
-				float length = 0;
-				for (int i = 0; i < name.size(); i++){
-					length += glutBitmapWidth(GLUT_BITMAP_TIMES_ROMAN_10, name[i]);
-				}
-				glColor4f(0, 0, 0, mContourTreeAlpha);
-				glRasterPos2f(supernodes[topNode].xPosn - length / 2 * pixelWidth, supernodes[topNode].yPosn + cutSize);
-				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)name.c_str());
-			}
-			else if (supernodes[bottomNode].IsLowerLeaf() || supernodes[bottomNode].IsUpperLeaf()){
-				float length = 0;
-				for (int i = 0; i < name.size(); i++){
-					length += glutBitmapWidth(GLUT_BITMAP_TIMES_ROMAN_10, name[i]);
-				}
-				glColor4f(0, 0, 0, mContourTreeAlpha);
-				glRasterPos2f(supernodes[bottomNode].xPosn - length / 2 * pixelWidth, supernodes[bottomNode].yPosn + cutSize);
-				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)name.c_str());
-			}
-			else{
-				//glRasterPos2f(supernodes[bottomNode].xPosn + cutSize, 
-				//	(supernodes[bottomNode].yPosn + supernodes[topNode].yPosn)/2);
-			}
-		}
-	} // loop through superarcs
+	//DrawArcLabels();
+	DrawArcLabelsUnoccluded();
 
 	glPointSize(5.0);																	//	use a point radius of 5
 	glBegin(GL_POINTS);																	//	now draw some points
@@ -2623,9 +2719,10 @@ void MyContourTree::PruneNoneROIs(){
 	int numPruned = 0;
 
 	queue<long> leaveQueue;
-	for (int arc = 0; arc < nSuperarcs; arc++){
+	//for (int arc = 0; arc < nSuperarcs; arc++){
+	for (int arc = 0; arc < nValidArcs; arc++){
 		// Use top nodes
-		long whichArc = arc;
+		long whichArc = valid[arc];
 		if (supernodes[superarcs[whichArc].topID].IsUpperLeaf()){
 			leaveQueue.push(whichArc);
 		}

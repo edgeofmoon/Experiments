@@ -187,8 +187,8 @@ vec4 GetLightedColor(vec3 loc, vec3 pos, float density){
 	vec3 hv = normalize(eyeDir+lightDir);
 	float specular = 0.5*pow(clamp(dot(hv,normal),0,1),64);
 	//float specular = 0.5*pow(abs(dot(hv,normal)),16);
-	//vec4 rstColour = vec4(vec3(density),1);
-	vec4 rstColour = vec4(texture(colorMap, vec2(density, 0.5)).xyz,1);
+	vec4 rstColour = vec4(vec3(density),1);
+	//vec4 rstColour = vec4(texture(colorMap, vec2(density, 0.5)).xyz,1);
 	//vec4 rstColour = vec4(1,1,1,1);
 	rstColour = rstColour*(ambient+diffusion);
 	rstColour += vec4(specular,specular,specular,0);
@@ -209,7 +209,8 @@ void WriteDepth(vec3 pos){
 }
 
 void main() {
-	fragColour=vec4(0,0,0,1);
+	fragColour=vec4(1,1,1,1);
+	return;
 	//fragColour=texture(backFace, vec2(gl_FragCoord.x/windowWidth, gl_FragCoord.y/windowHeight));
 	
 	vec2 coord = vec2(gl_FragCoord.x/windowWidth, gl_FragCoord.y/windowHeight);

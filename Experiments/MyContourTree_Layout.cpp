@@ -843,7 +843,7 @@ void MyContourTree::DrawLegend(MyVec2f lowPos, MyVec2f highPos){
 			glRasterPos2f(xPos + exponentHeights.front()* rightHeightScale + 0.01, yStart + i*yStep);
 			string str = to_string(histogram[i]);
 			str.resize(6);
-			glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)str.c_str());
+			glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)str.c_str());
 		}
 	}
 	else{
@@ -899,10 +899,109 @@ void MyContourTree::DrawLegend(MyVec2f lowPos, MyVec2f highPos){
 			glRasterPos2f(xPos + maxBaseHeight*rightHeightScale*arcZoom+0.01, yStart + i*yStep);
 			string str = to_string(histogram[i]);
 			str.resize(6);
-			glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)str.c_str());
+			glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)str.c_str());
 		}
 		glDepthFunc(GL_LESS);
 
+	}
+}
+
+void MyContourTree::DrawLegendSimple(MyVec2f lowPos, MyVec2f highPos){
+	float tickHeight = 0.01;
+	float height;
+	float height1;
+	float count = mMaxHistogramCount;
+	if (mDefaultScale != MyContourTree::MappingScale_Sci){
+		if (mDefaultScale == MyContourTree::MappingScale_Linear){
+			count /= 7;
+		}
+		height = GetDrawingHeight(count, mDefaultScale);
+
+		glColor4f(0, 0, 0, 1);
+		glBegin(GL_LINE_STRIP);
+		glVertex2f(lowPos[0], lowPos[1] + tickHeight);
+		glVertex2f(lowPos[0], lowPos[1]);
+		glVertex2f(lowPos[0] + height, lowPos[1]);
+		glVertex2f(lowPos[0] + height, lowPos[1] + tickHeight);
+		glEnd();
+		glRasterPos2f(lowPos[0], lowPos[1] + tickHeight);
+		string str = to_string(count);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)str.c_str());
+	}
+	else{
+		height = GetDrawingHeight(count, mDefaultScale);
+		count = mMaxMantissa*pow(10, mMaxExponent);
+		float exponentHeight;
+		float mantissaHeight;
+		GetDrawingHeightScientific(count, exponentHeight, mantissaHeight);
+
+
+		int viewport[4];
+		glGetIntegerv(GL_VIEWPORT, viewport);
+
+		glColor4f(0, 0, 1, 1);
+		glBegin(GL_LINE_STRIP);
+		glVertex2f(lowPos[0], lowPos[1] + tickHeight);
+		glVertex2f(lowPos[0], lowPos[1]);
+		glVertex2f(lowPos[0] + mantissaHeight, lowPos[1]);
+		glVertex2f(lowPos[0] + mantissaHeight, lowPos[1] + tickHeight);
+		glEnd();
+		glBegin(GL_LINES);
+		glVertex2f(lowPos[0] + mScientificWidthScale, lowPos[1]);
+		glVertex2f(lowPos[0] + mScientificWidthScale, lowPos[1] + tickHeight);
+		glEnd();
+		glRasterPos2f(lowPos[0], lowPos[1] + tickHeight);
+		// set max mantissa = 10;
+		string str = to_string(10);
+		str.resize(2);
+		str = "Mantissa";
+		glRasterPos2f(lowPos[0], lowPos[1] + tickHeight+0.01);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)str.c_str());
+		glRasterPos2f(lowPos[0] 
+			- glutBitmapLength(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)"0") / (float)viewport[2],
+			lowPos[1] - 0.025);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)"0");
+		glRasterPos2f(lowPos[0] + mantissaHeight, lowPos[1] - 0.025);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)"10");
+
+		float offsety = (highPos[1] - lowPos[1]) / 2;
+		float offsetx = (highPos[0] - lowPos[0]) / 2;
+		offsetx = 0;
+		glColor4f(0, 0, 0, 1);
+		glBegin(GL_LINE_STRIP);
+		glVertex2f(lowPos[0] + offsetx, lowPos[1] + offsety + tickHeight);
+		glVertex2f(lowPos[0] + offsetx, lowPos[1] + offsety);
+		glVertex2f(lowPos[0] + offsetx + exponentHeight, lowPos[1] + offsety);
+		glVertex2f(lowPos[0] + offsetx + exponentHeight, lowPos[1] + offsety + tickHeight);
+		glEnd();
+		glBegin(GL_LINES);
+		glVertex2f(lowPos[0] + offsetx + mScientificWidthScale, lowPos[1] + offsety);
+		glVertex2f(lowPos[0] + offsetx + mScientificWidthScale, lowPos[1] + offsety + tickHeight);
+		glEnd();
+		str = "Exponent";
+		glRasterPos2f(lowPos[0] + offsetx, lowPos[1] + offsety + tickHeight+0.01);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)str.c_str());
+		glRasterPos2f(lowPos[0] + offsetx - 
+			glutBitmapLength(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)to_string(mMinExponent).c_str())/(float)viewport[2],
+			lowPos[1] + offsety - 0.05);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)to_string(mMinExponent).c_str());
+		glRasterPos2f(lowPos[0] + offsetx + mantissaHeight, lowPos[1] + offsety - 0.05);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)to_string(mMaxExponent).c_str());
+
+		// color quads
+		float quadOffsetY = -0.025;
+		float quadHeight = 0.020;
+		for (int i = 0; i < 8; i++){
+			glBegin(GL_QUADS);
+			glColor4ub(colorBrewer_sequential_8_multihue_9[i][0], 
+				colorBrewer_sequential_8_multihue_9[i][1], 
+				colorBrewer_sequential_8_multihue_9[i][2], 255);
+			glVertex2f(lowPos[0] + offsetx + exponentHeight / 8.f * i, lowPos[1] + offsety + quadOffsetY);
+			glVertex2f(lowPos[0] + offsetx + exponentHeight / 8.f * (i + 1), lowPos[1] + offsety + quadOffsetY);
+			glVertex2f(lowPos[0] + offsetx + exponentHeight / 8.f * (i + 1), lowPos[1] + offsety + quadOffsetY + quadHeight);
+			glVertex2f(lowPos[0] + offsetx + exponentHeight / 8.f * i, lowPos[1] + offsety + quadOffsetY + quadHeight);
+			glEnd();
+		}
 	}
 }
 
@@ -1121,6 +1220,10 @@ void MyContourTree::updateScientificHistograms(){
 	float clampExp = floor(log10(mCountClamp));
 	mCountClamp = pow(10, clampExp);
 
+	// added to ensure consistency
+	// bad idea though
+	mCountClamp = pow(10, -4);
+
 	mMinExponent = 99999;
 	mMaxExponent = -9999;
 	mMinMantissa = 10;
@@ -1149,8 +1252,10 @@ void MyContourTree::updateScientificHistograms(){
 
 	}
 	else{
-		mExponent_Scale = mantissaRange / exponentRange;
-		mExponent_Offset = mMinMantissa / mExponent_Scale - mMinExponent;
+		//mExponent_Scale = mantissaRange / exponentRange;
+		//mExponent_Offset = mMinMantissa / mExponent_Scale - mMinExponent;
+		mExponent_Offset = 1 - mMinExponent;
+		mExponent_Scale = 1;
 	}
 
 	cout << "Exponent range: " << mMinExponent << ',' << mMaxExponent << endl;

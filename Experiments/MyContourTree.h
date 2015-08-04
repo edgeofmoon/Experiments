@@ -53,12 +53,15 @@ protected:
 	MappingScale mAltScale;
 	HistogramSide mHistogramSide;
 	float mContourTreeAlpha;
+	std::string mName;
 public:
 	void SetContourTreeAlpha(float alpha){ mContourTreeAlpha = alpha; };
 	float GetContourTreeAlpha() const { return mContourTreeAlpha; };
 	void SetDefaultMappingScale(MappingScale scale){ mDefaultScale = scale; };
 	void SetAltMappingScale(MappingScale scale){ mAltScale = scale; };
 	void SetHistogramSide(HistogramSide side){ mHistogramSide = side; };
+	void SetName(const std::string& name){ mName = name; };
+	std::string GetName() const{ return mName; };
 	Array3D<float>& GetVolume() { return height; };
 	void LoadLabelVolume(char* fileName);
 	void LoadLabelTable(char* fileName);
@@ -68,6 +71,9 @@ public:
 	void DrawArcSnappingPoint(long arc);
 	void DrawArcHistogram(long arc);
 	void DrawArcHistogramScientific(long arc);
+	void DrawContourTreeFrame();
+	void DrawArcLabels();
+	void DrawArcLabelsUnoccluded();
 	void DrawPlanarContourTree();
 	void DrawSelectedVoxes(bool useDisplayLists, bool pickColours);
 	void DrawSelectedArcVoxes(long arc, bool useDisplayLists, bool pickColours);
@@ -142,6 +148,9 @@ public:
 	void SetupVolomeRenderingBuffers(int width, int height);
 	void SetColorTexture(GLuint tex){ colorTex = tex; };
 	void SetColorMap(MyBitmap* bitmap){ colorMap = bitmap; };
+	Array3D<float>& GetMaskVolume(){ return mMaskVolume; };
+
+	void ShowSelectedVoxes();
 
 	// layout component
 protected:
@@ -176,6 +185,7 @@ public:
 	float GetBinWidth() const { return mBinWidth; };
 	float UpdateSubTreeLayout(long rootNode, long parentNode, float xStart, float xEnd);
 	void DrawLegend(MyVec2f lowPos, MyVec2f highPos);
+	void DrawLegendSimple(MyVec2f lowPos, MyVec2f highPos);
 	float SuggestAltMappingWidthScaleModifier() const;
 	float GetAltMappingWidthScale() const;
 	void SetAltMappingScale(float scale);
@@ -210,7 +220,6 @@ protected:
 	int mMinExponent, mMaxExponent;
 	float mMinMantissa, mMaxMantissa;
 	float mScientificWidthScale;
-	// this linear mapping maps exponent to the mantissa range
 	float mExponent_Scale;
 	float mExponent_Offset;
 	float mCountClamp;

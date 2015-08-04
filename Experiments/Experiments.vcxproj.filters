@@ -246,6 +246,9 @@
     <ClCompile Include="ctGui_Viewer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MySpaceFillingNaive.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -443,6 +446,9 @@
     <ClInclude Include="GL\glui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MySpaceFillingNaive.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="raycasting.vert">
@@ -473,6 +479,18 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="selVol.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="fisheye.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="fisheye.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="tube.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="tube.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

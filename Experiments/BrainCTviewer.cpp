@@ -34,7 +34,7 @@ int eyeIfNonStereo = 0;
 int windowWidth = 2700;
 int windowHeight = 900;
 float zDistance = 1000;
-char defaultByte = 0x02;
+MyContourTree::MappingScale defaultByte = MyContourTree::MappingScale_Sci;
 
 MySlider<float> slider;
 MySlider<int> pruneSlider;
@@ -920,7 +920,7 @@ void RenderLegendScientific(float xOffset, float yOffset, float yRange){
 	int maxExp = field1->GetMaxExponent();
 	float expOffset = field1->GetExponnetScaleOffset();
 	float expScale = field1->GetExponentScaleWidth();
-	float sciScale = field1->GetScientificScaleWidth();
+	float sciScale = field1->GetScientificWidthScale();
 	float yExpStep = yRange / (maxExp - minExp + 1)/3;
 
 	for (int exp = minExp; exp <= maxExp; exp++){
@@ -1013,7 +1013,7 @@ void RenderLegendScientificOneSided(float xOffset, float yOffset, float yRange){
 	int maxExp = field1->GetMaxExponent();
 	float expOffset = field1->GetExponnetScaleOffset();
 	float expScale = field1->GetExponentScaleWidth();
-	float sciScale = field1->GetScientificScaleWidth();
+	float sciScale = field1->GetScientificWidthScale();
 	float yExpStep = yRange / (maxExp - minExp + 1) / 3;
 
 	for (int exp = minExp; exp <= maxExp; exp++){
@@ -1094,7 +1094,7 @@ void RenderLegendScientificOneSided(float xOffset, float yOffset, float yRange){
 void display(){
 
 	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
-	glClearColor(1, 1, 1, 0);
+	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glPushMatrix();
@@ -1177,7 +1177,7 @@ void display(){
 
 	if (field2 != 0){
 		MyGraphicsTool::SetViewport(MyVec4i(windowWidth / 3 * 2, 0, windowWidth / 3, windowHeight));
-		field2->SetScaleWidth(field1->GetScaleWidth());
+		field2->SetScientificWidthScale(field1->GetScientificWidthScale());
 		field2->DrawPlanarContourTree();
 	}
 
@@ -1266,28 +1266,57 @@ void selectArcCompare(int x, int y, MyContourTree* field){
 }
 
 void updateScaleWidth(){
+	MyContourTree* fields[] = { field1, field2 };
 	float scaleWidth = 1;
 	float scaleWidth1 = 0;
 	float scaleWidth2 = 0;
-	if (field1 != 0){
-		scaleWidth1 = field1->SuggestComparedArcWidthScale(defaultByte);
-	}
-	if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
-	if (field2 != 0){
-		scaleWidth2 = field2->SuggestComparedArcWidthScale(defaultByte);
-	}
-	if (scaleWidth2 != 0)scaleWidth = min(scaleWidth, scaleWidth2);
-	if (scaleWidth != 0){
-		field1->SetComparedArcWidthScale(scaleWidth);
-		if (field2 != 0){
-			field2->SetComparedArcWidthScale(scaleWidth);
+	if (defaultByte == MyContourTree::MappingScale_Sci){
+		if (fields[0] != 0){
+			scaleWidth1 = fields[0]->GetScientificWidthScale();
+		}
+		if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
+		if (fields[1] != 0){
+			scaleWidth2 = fields[1]->GetScientificWidthScale();
+		}
+		if (scaleWidth2 != 0) scaleWidth = min(scaleWidth, scaleWidth2);
+		if (scaleWidth != 0){
+			fields[0]->SetScientificWidthScale(scaleWidth);
+			if (fields[1] != 0){
+				fields[1]->SetScientificWidthScale(scaleWidth);
+			}
 		}
 	}
-	cout << "Field1 Compared Scale Width = " << field1->GetComparedArcScaleWidth() << endl;
-	cout << "Field1 log Scale Width = " << field1->GetScaleWidth() << endl;
-	if (field2 != 0){
-		cout << "Field2 Compared Scale Width = " << field2->GetComparedArcScaleWidth() << endl;
-		cout << "Field2 log Scale Width = " << field2->GetScaleWidth() << endl;
+	else if (defaultByte == MyContourTree::MappingScale_Linear){
+		if (fields[0] != 0){
+			scaleWidth1 = fields[0]->GetLinearScaleWidth();
+		}
+		if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
+		if (fields[1] != 0){
+			scaleWidth2 = fields[1]->GetLinearScaleWidth();
+		}
+		if (scaleWidth2 != 0) scaleWidth = min(scaleWidth, scaleWidth2);
+		if (scaleWidth != 0){
+			fields[0]->SetLinearScaleWidth(scaleWidth);
+			if (fields[1] != 0){
+				fields[1]->SetLinearScaleWidth(scaleWidth);
+			}
+		}
+	}
+	else{
+		if (fields[0] != 0){
+			scaleWidth1 = fields[0]->GetLogScaleWidth();
+		}
+		if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
+		if (fields[1] != 0){
+			scaleWidth2 = fields[1]->GetLogScaleWidth();
+		}
+		if (scaleWidth2 != 0) scaleWidth = min(scaleWidth, scaleWidth2);
+		if (scaleWidth != 0){
+			fields[0]->SetLogScaleWidth(scaleWidth);
+			if (fields[1] != 0){
+				fields[1]->SetLogScaleWidth(scaleWidth);
+			}
+		}
 	}
 }
 
@@ -1296,17 +1325,17 @@ void updateScaleWidthScientific(){
 	float scaleWidth1 = 0;
 	float scaleWidth2 = 0;
 	if (field1 != 0){
-		scaleWidth1 = field1->GetScientificScaleWidth();
+		scaleWidth1 = field1->GetScientificWidthScale();
 	}
 	if (scaleWidth1 != 0) scaleWidth = scaleWidth1;
 	if (field2 != 0){
-		scaleWidth2 = field2->GetScientificScaleWidth();
+		scaleWidth2 = field2->GetScientificWidthScale();
 	}
 	if (scaleWidth2 != 0) scaleWidth = min(scaleWidth, scaleWidth2);
 	if (scaleWidth != 0){
-		field1->SetScientificScaleWidth(scaleWidth);
+		field1->SetScientificWidthScale(scaleWidth);
 		if (field2 != 0){
-			field2->SetScientificScaleWidth(scaleWidth);
+			field2->SetScientificWidthScale(scaleWidth);
 		}
 	}
 }

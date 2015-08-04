@@ -3,7 +3,7 @@
 #include <cstring>
 
 void MyContourTree::BackupTree(){
-	memcpy(mSuperArcsBkup, superarcs, nSuperarcs*sizeof(Superarc));
+	memcpy(mSuperArcsBkup, superarcs, 2 * nSuperarcs*sizeof(Superarc));
 	memcpy(mValidArcs, valid, 2 * nSuperarcs*sizeof(long));
 	memcpy(mSuperNodesBkup, supernodes, nSupernodes*sizeof(Supernode));
 	memcpy(mValidNodes, validNodes, nSupernodes*sizeof(long));
@@ -18,7 +18,7 @@ void MyContourTree::BackupTree(){
 }
 
 void MyContourTree::RestoreTree(){
-	memcpy(superarcs, mSuperArcsBkup, nSuperarcs*sizeof(Superarc));
+	memcpy(superarcs, mSuperArcsBkup, 2 * nSuperarcs*sizeof(Superarc));
 	memcpy(valid, mValidArcs, 2 * nSuperarcs*sizeof(long));
 	memcpy(supernodes, mSuperNodesBkup, nSupernodes*sizeof(Supernode));
 	memcpy(validNodes, mValidNodes, nSupernodes*sizeof(long));

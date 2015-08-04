@@ -14,7 +14,7 @@ out vec4 fragColour;
 
 void main(){
 	if(rawPosition.x>cutCone.x && rawPosition.y>cutCone.y && rawPosition.z>cutCone.z){
-		discard;
+	//	discard;
 	}
 	vec3 normal = normalize(eyeCoordNormal);
 	vec3 lightDir = vec3(0,1,0);

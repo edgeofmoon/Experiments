@@ -14,7 +14,6 @@ void MyContourTree::MarkSelectedArcVoxes(long arc, float isoValue){
 		height.ComputeIndex(voxes[i], x, y, z);
 		mMaskVolume(x, y, z) = 1;
 	}
-
 	queue<long> arcQueue;
 	long nextArc = supernodes[superarcs[arc].topID].upList;
 	for (int i = 0; i < supernodes[superarcs[arc].topID].upDegree; i++){
@@ -60,7 +59,7 @@ void MyContourTree::MarkSelectedVoxes(){
 	} // for theArc
 
 	// update the volume too
-	loadMarkVolumeTexture();
+	//loadMarkVolumeTexture();
 }
 
 void MyContourTree::VolumeRenderingSelectedVoxes(int winWidth, int winHeight){

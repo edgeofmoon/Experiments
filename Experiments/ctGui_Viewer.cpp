@@ -22,8 +22,8 @@
 #define BOARDER_Y_RANGE (1+BOARDER_Y+BOARDER_Y)
 
 bool showTracks = false;
-bool showMesh = true;
-bool showSecTree = true;
+bool showMesh = false;
+bool showSecTree = false;
 int gl_error;
 
 /**************************************** Shared ********************/
@@ -595,17 +595,29 @@ void draw(int width, int height){
 			//glColor4fv(color2);
 			fields[1]->FlexibleContours(true, false);
 		}
-
-		float color3[] = { 0.5, 0.5, 0.6, 1 };
-		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color3);
-		if (showTracks){
-			track.Show();
-		}
 		glColor3fv(color1);
 		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 		glDisable(GL_LIGHTING);
 		glDisable(GL_LIGHT0);
 	}glPopMatrix();
+
+
+
+	if (showTracks){
+		glPushMatrix(); {
+			MyGraphicsTool::LoadTrackBall(&trackBall);
+			glTranslatef(-fields[0]->GetVolume().XDim() / 2,
+				-fields[0]->GetVolume().YDim() / 2,
+				-fields[0]->GetVolume().ZDim() / 2);
+			float color3[] = { 0.5, 0.5, 0.6, 1 };
+			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color3);
+			glEnable(GL_LIGHTING);
+			glEnable(GL_LIGHT0);
+			track.Show();
+			glDisable(GL_LIGHTING);
+			glDisable(GL_LIGHT0);
+		}glPopMatrix();
+	}
 
 	gl_error = glGetError();
 	if (showMesh){
@@ -903,6 +915,8 @@ void myGlutKeyboard(unsigned char Key, int x, int y)
 	case 'I':
 		isovalue = max(0.0, isovalue - 0.1);
 		fields[0]->SetIsosurface(isovalue);
+		fields[0]->MarkSelectedVoxes();
+		track.FilterByVolumeMask(fields[0]->GetMaskVolume());
 		break;
 	};
 
@@ -921,12 +935,16 @@ void myGlutMouse(int button, int state, int x, int y)
 			trackBall.StartMotion(x, y);
 			isRotating = true;
 			dragFocus = DRAG_FOCUS_VOL_0;
+
+			// test read pixels
+
 		}
 		else {
 			int fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
 			if (button == GLUT_LEFT_BUTTON){
 				selectArc(x - windowWidth / 3, windowHeight - y, fieldIdx);
-				//fields[0]->MarkSelectedVoxes();
+				fields[0]->MarkSelectedVoxes();
+				track.FilterByVolumeMask(fields[0]->GetMaskVolume());
 				dragFocus = DRAG_FOCUS_TREE_0 + fieldIdx;
 			}
 			else if (button == GLUT_RIGHT_BUTTON){
@@ -1138,7 +1156,7 @@ int main(int argc, char* argv[])
 
 	if (showTracks){
 		//track.Read("ACR.trk");
-		track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\dti.trk");
+		track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\ACR.trk");
 		track.SetShape(MyTracks::TRACK_SHAPE_LINE);
 		//track.SetShape(MyTracks::TRACK_SHAPE_TUBE);
 		track.ComputeGeometry();
@@ -1157,6 +1175,10 @@ int main(int argc, char* argv[])
 	fields[0]->ComputeArcNames();
 	fields[0]->SetIsosurface(isovalue);
 	fields[0]->SetNodeXPositionsExt(defaultScale);
+
+
+	fields[0]->MarkSelectedVoxes();
+	track.FilterByVolumeMask(fields[0]->GetMaskVolume());
 
 	if (showSecTree){
 		if (argc > 2){

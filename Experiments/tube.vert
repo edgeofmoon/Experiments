@@ -26,7 +26,7 @@ void main (void)
 {
 	//float r = radius;
 	float r = 0.4;
-	vec3 tposition = position+normal*r;
+	vec3 tposition = position;//+normal*r;
 	gl_Position = projMat*mvMat*vec4(tposition,1);
 
 	fposition = vec3(mvMat*vec4(tposition,1));

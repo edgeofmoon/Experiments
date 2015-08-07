@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <thread>
 using namespace std;
 
 #include "GL\glew.h"
@@ -201,7 +202,7 @@ void MyTracks::ComputeTubeGeometry(){
 			for (int is = 0; is<mFaces; is++){
 				float angle = dangle*is;
 				MyVec3f pt = sin(angle)*perpend1 + cos(angle)*perpend2;
-				mVertices[currentIdx + i*(mFaces + 1) + is] = pt * 0 + p;
+				mVertices[currentIdx + i*(mFaces + 1) + is] = pt * 0.4 + p;
 				mNormals[currentIdx + i*(mFaces + 1) + is] = pt;
 				mTexCoords[currentIdx + i*(mFaces + 1) + is] = MyVec2f(i, is / (float)mFaces);
 				mRadius[currentIdx + i*(mFaces + 1) + is] = size;
@@ -219,8 +220,9 @@ void MyTracks::ComputeTubeGeometry(){
 		mIdxOffset << currentIdx;
 		currentIdx += npoints*(mFaces + 1);
 	}
-	/*
 	// index
+	/*
+	mIndices.clear();
 	for (int it = 0; it<this->GetNumTracks(); it++){
 		int offset = mIdxOffset[it];
 		for (int i = 1; i<this->GetNumVertex(it); i++){
@@ -235,6 +237,20 @@ void MyTracks::ComputeTubeGeometry(){
 		}
 	}
 	*/
+	mIndices.clear();
+	for (int it = 0; it<this->GetNumTracks(); it++){
+		int offset = mIdxOffset[it];
+		for (int i = 1; i<this->GetNumVertex(it); i++){
+			for (int j = 0; j < mFaces; j++){
+				mIndices << MyVec3i((i - 1)*(mFaces + 1) + j + offset,
+					(i)*(mFaces + 1) + j + offset,
+					(i)*(mFaces + 1) + (j + 1) + offset);
+				mIndices << MyVec3i((i - 1)*(mFaces + 1) + j + offset,
+					(i)*(mFaces + 1) + (j + 1) + offset,
+					(i - 1)*(mFaces + 1) + (j + 1) + offset);
+			}
+		}
+	}
 }
 
 void MyTracks::ComputeLineGeometry(){
@@ -247,9 +263,9 @@ void MyTracks::ComputeLineGeometry(){
 	}
 	mVertices.resize(totalPoints);
 	mNormals.resize(totalPoints);
-	mTexCoords.resize(totalPoints);
-	mRadius.resize(totalPoints);
-	mColors.resize(totalPoints);
+	//mTexCoords.resize(totalPoints);
+	//mRadius.resize(totalPoints);
+	//mColors.resize(totalPoints);
 
 	for (int it = 0; it < mTracks.size(); it++){
 		int npoints = mTracks[it].mSize;
@@ -298,16 +314,24 @@ void MyTracks::ComputeLineGeometry(){
 
 			mVertices[currentIdx + i] = p;
 			mNormals[currentIdx + i] = perpend1;
-			mTexCoords[currentIdx + i] = MyVec2f(i, 1);
-			mRadius[currentIdx + i] = 0.4;
+			//mTexCoords[currentIdx + i] = MyVec2f(i, 1);
+			//mRadius[currentIdx + i] = 0.4;
 			//mColors[currentIdx + i] = mTracts->GetColor(it, i);
-			mColors[currentIdx + i] = MyColor4f(0.5, 0.5, 0.5, 1);
+			//mColors[currentIdx + i] = MyColor4f(0.5, 0.5, 0.5, 1);
 		}
 
 		mIdxOffset << currentIdx;
 		currentIdx += npoints;
 	}
 
+	mLineIndices.clear();
+	// index
+	for (int it = 0; it<this->GetNumTracks(); it++){
+		int offset = mIdxOffset[it];
+		for (int i = 0; i<this->GetNumVertex(it); i++){
+			mLineIndices << i + offset;
+		}
+	}
 }
 
 void MyTracks::ComputeGeometry(){
@@ -322,7 +346,7 @@ void MyTracks::ComputeGeometry(){
 
 void MyTracks::LoadGeometry(){
 	if (mShape == TRACK_SHAPE_LINE){
-		return;
+	//	return;
 	}
 	if (glIsVertexArray(mVertexArray)){
 		glDeleteVertexArrays(1, &mVertexArray);
@@ -347,6 +371,7 @@ void MyTracks::LoadGeometry(){
 	glBufferData(GL_ARRAY_BUFFER, mNormals.size() * sizeof(MyVec3f), &mNormals[0][0], GL_STATIC_DRAW);
 	glEnableVertexAttribArray(mNormalAttribute);
 	glVertexAttribPointer(mNormalAttribute, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	/*
 	// texCoord
 	if (glIsBuffer(mTexCoordBuffer)){
 		glDeleteBuffers(1, &mTexCoordBuffer);
@@ -374,6 +399,7 @@ void MyTracks::LoadGeometry(){
 	glBufferData(GL_ARRAY_BUFFER, mColors.size() * sizeof(MyColor4f), &mColors[0].r, GL_STATIC_DRAW);
 	glEnableVertexAttribArray(mColorAttribute);
 	glVertexAttribPointer(mColorAttribute, 4, GL_FLOAT, GL_FALSE, 0, 0);
+	*/
 	// texture
 	//glActiveTexture(GL_TEXTURE0);
 	//glBindTexture(GL_TEXTURE_2D, texture);
@@ -383,8 +409,11 @@ void MyTracks::LoadGeometry(){
 	}
 	glGenBuffers(1, &mIndexBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mIndexBuffer);
-	if (mIndices.size()>0){
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, mIndices.size() * sizeof(MyVec3i), &mIndices[0][0], GL_DYNAMIC_DRAW);
+	if (mShape == TRACK_SHAPE_TUBE && mIndices.size()>0){
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, mIndices.size() * sizeof(MyVec3i), &mIndices[0][0], GL_STATIC_DRAW);
+	}
+	else if (mShape == TRACK_SHAPE_LINE && mLineIndices.size()>0){
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, mLineIndices.size() * sizeof(int), &mLineIndices[0], GL_STATIC_DRAW);
 	}
 	else{
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, 0, 0, GL_DYNAMIC_DRAW);
@@ -398,11 +427,13 @@ void MyTracks::LoadGeometry(){
 	mTexCoords.clear();
 	mRadius.clear();
 	mColors.clear();
+	mIndices.clear();
+	mLineIndices.clear();
 }
 
 void MyTracks::LoadShader(){
 	if (mShape == TRACK_SHAPE_LINE){
-		return;
+	//	return;
 	}
 
 	glDeleteProgram(mShaderProgram);
@@ -435,10 +466,10 @@ void MyTracks::LoadShader(){
 }
 
 void MyTracks::Show(){
-	if (mShape == TRACK_SHAPE_TUBE){
+	//if (mShape == TRACK_SHAPE_TUBE){
 		glEnable(GL_DEPTH_TEST);
-		//glEnable(GL_CULL_FACE);
-		//glCullFace(GL_BACK);
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glBindVertexArray(mVertexArray);
@@ -478,47 +509,70 @@ void MyTracks::Show(){
 		glUniform1i(screenSpaceLocation, screenSpace);
 
 		if (mShape == TRACK_SHAPE_TUBE){
-			glDrawElements(GL_TRIANGLES, mIndices.size() * 3, GL_UNSIGNED_INT, 0);
-		}
-		else{
-			int offset = 0;
+			//glDrawElements(GL_TRIANGLES, mIndices.size(), GL_UNSIGNED_INT, 0);
 			for (int i = 0; i < mFiberToDraw.size(); i++){
 				int fiberIdx = mFiberToDraw[i];
+				int offset = (mIdxOffset[fiberIdx]/(mFaces+1)-fiberIdx)*mFaces*6;
+				int numVertex = (this->GetNumVertex(fiberIdx)-1)*(mFaces+0)*6;
+				glDrawElements(GL_TRIANGLES, numVertex, GL_UNSIGNED_INT, (const void *)(offset*sizeof(int)));
+			}
+		}
+		else{
+			for (int i = 0; i < mFiberToDraw.size(); i++){
+				int fiberIdx = mFiberToDraw[i];
+				int offset = mIdxOffset[fiberIdx];
 				int numVertex = this->GetNumVertex(fiberIdx);
-				glDrawElements(GL_LINE_STRIP, numVertex, GL_UNSIGNED_INT, &mLineIndices[offset]);
-				offset += numVertex;
+				glDrawElements(GL_LINE_STRIP, numVertex, GL_UNSIGNED_INT, (const void *)(offset*sizeof(int)));
 			}
 		}
 
 		glDisable(GL_BLEND);
 		glUseProgram(0);
 		glBindVertexArray(0);
-		//glDisable(GL_CULL_FACE);
-	}
-	else{
-		int offset = 0;
-		for (int i = 0; i < mFiberToDraw.size(); i++){
-			int fiberIdx = mFiberToDraw[i];
-			int numVertex = this->GetNumVertex(fiberIdx);
-			glBegin(GL_LINE_STRIP);
-			for (int j = 0; j < numVertex; j++){
-				MyGraphicsTool::Normal(mNormals[mLineIndices[offset + j]]);
-				MyGraphicsTool::Vertex(mVertices[mLineIndices[offset + j]]);
-			}
-			glEnd();
-			offset += numVertex;
-		}
-	}
+		glDisable(GL_CULL_FACE);
+	//}
+	//else{
+	//	int offset = 0;
+	//	for (int i = 0; i < mFiberToDraw.size(); i++){
+	//		int fiberIdx = mFiberToDraw[i];
+	//		int numVertex = this->GetNumVertex(fiberIdx);
+	//		glBegin(GL_LINE_STRIP);
+	//		for (int j = 0; j < numVertex; j++){
+	//			MyGraphicsTool::Normal(mNormals[mLineIndices[offset + j]]);
+	//			MyGraphicsTool::Vertex(mVertices[mLineIndices[offset + j]]);
+	//		}
+	//		glEnd();
+	//		offset += numVertex;
+	//	}
+	//}
 }
 
 void MyTracks::GetVoxelIndex(const MyVec3f vertex, long &x, long &y, long &z) const{
-	x = (long)vertex[0];
-	y = (long)vertex[1];
-	z = (long)vertex[2];
+	x = 181-(long)vertex[0];
+	y = 217-(long)vertex[1];
+	z = 181-(long)vertex[2];
+}
+
+void MyTracks::MaskFiber(MyTracks* tracks, Array3D<float>* mask, int startIdx, int endIdx){
+	for (int i = startIdx; i <= endIdx; i++){
+		for (int j = 0; j < tracks->GetNumVertex(i); j++){
+			long x, y, z;
+			tracks->GetVoxelIndex(tracks->GetCoord(i, j), x, y, z);
+			if (mask->operator()(x, y, z) > 0.5){
+				tracks->mFiberDraw[i] = true;
+				break;
+			}
+		}
+	}
+
 }
 
 void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
 	mFiberToDraw.clear();
+	mFiberDraw = MyArrayb(mTracks.size(), false);
+	// mask the fibers
+	// serial edition
+	/*
 	for (int i = 0; i < this->GetNumTracks(); i++){
 		for (int j = 0; j < this->GetNumVertex(i); j++){
 			long x, y, z;
@@ -529,7 +583,33 @@ void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
 			}
 		}
 	}
+	*/
+
+	//MaskFiber(this, &mask, 0, mTracks.size() - 1);
+
+	// multi-thread edition
+	int numThread = std::thread::hardware_concurrency()-1;
+	std::thread *tt = new std::thread[numThread - 1];
+	float fiberPerThread = mTracks.size() / (float)numThread;
+	for (int i = 0; i < numThread-1; i++){
+		int startIdx = fiberPerThread*i;
+		int endIdx = fiberPerThread*(i+1)-1;
+		tt[i] = std::thread(MaskFiber, this, &mask, startIdx, endIdx);
+	}
+	MaskFiber(this, &mask, fiberPerThread*(numThread - 1), mTracks.size() - 1);
+	for (int i = 0; i < numThread - 1; i++){
+		tt[i].join();
+	}
+	delete[] tt;
+	for (int i = 0; i < mFiberDraw.size(); i++){
+		if (mFiberDraw[i]){
+			mFiberToDraw << i;
+		}
+	}
+
 	std::cout << "Filter: " << mFiberToDraw.size() << " fibers to be drawn.\n";
+		/*
+	// updating indices
 	if (mShape == TRACK_SHAPE_TUBE){
 		mIndices.clear();
 		for (int itt = 0; itt<mFiberToDraw.size(); itt++){
@@ -569,7 +649,6 @@ void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
 				mLineIndices << offset + i;
 			}
 		}
-		/*
 		glBindVertexArray(mVertexArray);
 		if (glIsBuffer(mIndexBuffer)){
 			glDeleteBuffers(1, &mIndexBuffer);
@@ -583,7 +662,7 @@ void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, 0, 0, GL_DYNAMIC_DRAW);
 		}
 		glBindVertexArray(0);
-		*/
 	}
 
+		*/
 }

@@ -119,6 +119,9 @@ public:
 // for filtering
 protected:
 	MyArrayi mFiberToDraw;
+	MyArrayb mFiberDraw;
+	static void MaskFiber(MyTracks* tracks, Array3D<float>* mask, int startIdx, int endIdx);
+
 public:
 	void GetVoxelIndex(const MyVec3f vertex, long &x, long &y, long &z) const;
 	void FilterByVolumeMask(Array3D<float>& mask);

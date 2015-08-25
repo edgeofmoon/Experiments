@@ -1,5 +1,4 @@
 #pragma once
-
 #include "HeightField.h"
 #include "MyFrameBuffer.h"
 #include "MyVec.h"
@@ -273,5 +272,69 @@ public:
 // for renaming
 public:
 	static void RenameLeaveArcsBySimilarity(MyContourTree* ct0, MyContourTree* ct1);
+
+// for contour drawing
+protected:
+	int mCurrentArcName;
+	int mIndex;
+	float mContourColour[3];
+	std::vector<float> mNormals;
+	std::vector<float> mVertices;
+	std::vector<int> mNames;
+
+	void RenderContour(long arc);
+	void FollowHierarchicalPathSeed(int sArc, float ht);
+	void FollowContour(float ht, Superarc &theArc);
+	void FollowSurface(float ht, float *p1, float *p2);
+	void IntersectSurface(float ht, long x, long y, long z, int theEntryFaceEdge);
+	void RenderTriangle(float ht, long x, long y, long z, float *cubeVert, int edge1, int edge2, int edge3);
+	void InterpolateVertex(long x, long y, long z, int edge, float *cubeVert, float ht);
+
+	void LoadContourGeometry();
+	void RenderContours();
+
+	// shader data
+	unsigned int mVertexArray;
+	unsigned int mVertexBuffer;
+	unsigned int mNormalBuffer;
+	unsigned int mNameBuffer;
+	unsigned int mIndexBuffer;
+	unsigned int mPositionAttribute;
+	unsigned int mNormalAttribute;
+	unsigned int mNameAttribute;
+	unsigned int mContourShaderProgram;
+
+	unsigned int mFrameBuffer;
+	unsigned int mColorTexture;
+	unsigned int mDepthTexture;
+	unsigned int mNameTexture;
+public:
+	void SetContourColour(float color[3]);
+	void SetIndex(int idx);
+	int GetIndex() const;
+	void CompileContourShader();
+	void BuildGLContourBuffer(int width, int height);
+	void FlexibleContours();
+
+// for difference tree
+protected:
+	Array3D<float> mVoxSignificance;
+	std::vector<long> mSigArcs;
+	float mSigArcThreshold_P;
+	float mSigArcThreshold_VolRatio;
+	MyContourTree* mContrastContourTree;
+	// map this arc to that arc
+	// -1 means no corresponding arc mapped
+	std::map<long, long> mArcMap;
+	void UpdateArcMapping();
+	void DrawArcDiffHistogram(long arc);
+	void DrawSimpleArc(long arc);
+public:
+	void SetSigArcThreshold_P(float p){ mSigArcThreshold_P = p; };
+	void SetSigArcThreshold_VolRatio(float vr){ mSigArcThreshold_VolRatio = vr; };
+	void LoadVoxSignificance(const char* fn);
+	void UpdateSigArcList();
+	void RenderSigDiffTree();
+	void SyncSigArcsTo(MyContourTree* ct);
 };
 

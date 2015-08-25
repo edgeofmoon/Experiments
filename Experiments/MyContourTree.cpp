@@ -268,6 +268,9 @@ MyContourTree::MyContourTree(int argc, char** argv)
 	mHistogramSide = HistogramSide_Right;
 	BackupTree();
 	//SetNodeXPositionsExt();
+
+	mSigArcThreshold_P = 0.01;
+	mSigArcThreshold_VolRatio = 0.5;
 }
 
 

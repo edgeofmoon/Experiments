@@ -7,4 +7,5 @@ typedef struct{
 	GLuint frameBuffer;
 	GLuint colorTexture;
 	GLuint depthTexture;
+	GLuint nameTexture;
 }frameBuffer;

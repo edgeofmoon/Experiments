@@ -229,6 +229,8 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="MyContourTree_ContourDrawing.cpp" />
+    <ClCompile Include="MyContourTree_DiffTree.cpp" />
     <ClCompile Include="MyContourTree_Layout.cpp" />
     <ClCompile Include="MyContourTree_Prune.cpp" />
     <ClCompile Include="MyContourTree_VolumeRendering.cpp" />
@@ -375,6 +377,8 @@
     <ClInclude Include="svd.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="contour.frag" />
+    <None Include="contour.vert" />
     <None Include="coord.frag" />
     <None Include="coord.vert" />
     <None Include="fisheye.frag" />

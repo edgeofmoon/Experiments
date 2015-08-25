@@ -1,4 +1,3 @@
-
 #include <string.h>
 #include <algorithm>
 #include <GL/glew.h>
@@ -23,7 +22,8 @@
 
 bool showTracks = false;
 bool showMesh = false;
-bool showSecTree = false;
+bool showSecTree = true;
+bool showDiffTree = true;
 int gl_error;
 
 /**************************************** Shared ********************/
@@ -37,17 +37,20 @@ MyTracks track;
 /**************************************** GL ********************/
 #define DSR_FACTOR_X 2
 #define DSR_FACTOR_Y 2
-frameBuffer drawBuffer;
 int windowWidth = 1800;
 int windowHeight = 800;
 
+// for contour trees
+frameBuffer drawBuffer;
+// for contours
+frameBuffer contourBuffer;
 // for fisheye
 frameBuffer fishEyeFBO;
 int fisheyeShader;
 GLuint fisheye_vertexArray;
 GLuint fisheye_vertexBuffer, fisheye_indexBuffer;
 
-void BuildGLBuffers(frameBuffer& fb){
+void BuildGLBuffers(frameBuffer& fb, bool hasName = false){
 	// COLOR
 	if (glIsTexture(fb.colorTexture)) {
 		glDeleteTextures(1, &(fb.colorTexture));
@@ -80,6 +83,21 @@ void BuildGLBuffers(frameBuffer& fb){
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, fb.width, fb.height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
+	// name
+	if (glIsTexture(fb.nameTexture)) {
+		glDeleteTextures(1, &(fb.nameTexture));
+	}
+	if (hasName){
+		glGenTextures(1, &(fb.nameTexture));
+		glBindTexture(GL_TEXTURE_2D, fb.nameTexture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32I, fb.width, fb.height, 0, GL_RGBA_INTEGER, GL_INT, 0);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
 	// FRAMEBUFFER ASSEMBLE
 	if (glIsFramebuffer(fb.frameBuffer)) {
 		glDeleteFramebuffers(1, &(fb.frameBuffer));
@@ -88,9 +106,15 @@ void BuildGLBuffers(frameBuffer& fb){
 	glBindFramebuffer(GL_FRAMEBUFFER, (fb.frameBuffer));
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, fb.colorTexture, 0);
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, fb.depthTexture, 0);
-
-	GLenum DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
-	glDrawBuffers(1, DrawBuffers);
+	if (hasName){
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + 1, fb.nameTexture, 0);
+		GLenum DrawBuffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT0+1 };
+		glDrawBuffers(2, DrawBuffers);
+	}
+	else{
+		GLenum DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
+		glDrawBuffers(1, DrawBuffers);
+	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -162,8 +186,8 @@ void drawMeshGlass(const MyMesh& mesh){
 	glDisable(GL_BLEND);
 }
 
-void RenderTexture(int texture){
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
+void RenderTexture(int texture, int x, int y, int width, int height){
+	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
 	MyGraphicsTool::PushProjectionMatrix();
 	MyGraphicsTool::PushMatrix();
 	MyGraphicsTool::LoadProjectionMatrix(&MyMatrixf::OrthographicMatrix(-1, 1, -1, 1, 1, 10));
@@ -190,8 +214,8 @@ void RenderTexture(int texture){
 	MyGraphicsTool::PopProjectionMatrix();
 }
 
-void RenderZoomedTexture(int texture){
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth, windowHeight));
+void RenderZoomedTexture(int texture, int x, int y, int width, int height){
+	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
 	MyGraphicsTool::PushProjectionMatrix();
 	MyGraphicsTool::PushMatrix();
 	MyGraphicsTool::LoadProjectionMatrix(&MyMatrixf::OrthographicMatrix(0, 1, 0, 1, 1, 10));
@@ -289,11 +313,11 @@ void RenderFisheyeTexture(int texture, int width, int height){
 	glBindTexture(GL_TEXTURE_2D, texture);
 
 	location = glGetUniformLocation(fisheyeShader, "center");
-	glUniform2f(location, magnifier_xPos/(float)windowWidth, 
+	glUniform2f(location, (magnifier_xPos-windowWidth/3)/((float)windowWidth*2/3), 
 		magnifier_yPos/(float)windowHeight);
 
 	location = glGetUniformLocation(fisheyeShader, "radius");
-	glUniform2f(location, magnifier_radius / (float)windowWidth,
+	glUniform2f(location, magnifier_radius / ((float)windowWidth * 2 / 3),
 		magnifier_radius / (float)windowHeight);
 
 	location = glGetUniformLocation(fisheyeShader, "focusRadius");
@@ -318,10 +342,17 @@ float offsetY[] = { 0, 1.04 };
 float lastOffsetX, lastOffsetY;
 float isovalue = 0.8;
 int pruningThreshold = 10;
+float sigArcP = 0.01;
+float sigArcVr = 0.5;
 int sourceCt = -1;
 int targetCt = -1;
 int frontField = 0;
 long viewArc[] = { -1, -1 };
+float contourColor[][3] = {
+	{ 1, 0, 0 }, 
+	{ 0, 0, 1 }
+};
+
 enum TreeLayout{
 	LAYOUT_VERTICAL = 1,
 	LAYOUT_HORIZONTAL = 2
@@ -559,76 +590,9 @@ void handleSnapRelease(int field, int otherField){
 	}
 }
 
-void draw(int width, int height){
-	glClearColor(1, 1, 1, 0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+void drawContourTrees(int x, int y, int width, int height){
 
-	gl_error = glGetError();
-	glEnable(GL_DEPTH_TEST);
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, width / 3, height));
-
-	glPushMatrix(); {
-		MyGraphicsTool::LoadTrackBall(&trackBall);
-		//drawMeshGlass(mesh);
-		glScalef(-1, -1, -1);
-		glTranslatef(-fields[0]->GetVolume().XDim() / 2,
-			-fields[0]->GetVolume().YDim() / 2,
-			-fields[0]->GetVolume().ZDim() / 2);
-		glEnable(GL_LIGHTING);
-		glEnable(GL_LIGHT0);
-		glEnable(GL_NORMALIZE);
-		float diffuse[] = { 1, 1, 1, 1 };
-		glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
-		glLightfv(GL_LIGHT0, GL_SPECULAR, diffuse);
-		float light_pos[] = { 0, 0, 1, 0 };
-		glLightfv(GL_LIGHT0, GL_POSITION, light_pos);
-		//glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-		glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, 1.0);
-		float color1[] = { 0.6, 0, 0, 1 };
-		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color1);
-		//glColor4fv(color1);
-		fields[0]->FlexibleContours(true, false);
-		//fields[0]->ShowSelectedVoxes();
-		if (fields[1] != 0) {
-			float color2[] = { 0, 0, 0.6, 1 };
-			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color2);
-			//glColor4fv(color2);
-			fields[1]->FlexibleContours(true, false);
-		}
-		glColor3fv(color1);
-		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
-		glDisable(GL_LIGHTING);
-		glDisable(GL_LIGHT0);
-	}glPopMatrix();
-
-
-
-	if (showTracks){
-		glPushMatrix(); {
-			MyGraphicsTool::LoadTrackBall(&trackBall);
-			glTranslatef(-fields[0]->GetVolume().XDim() / 2,
-				-fields[0]->GetVolume().YDim() / 2,
-				-fields[0]->GetVolume().ZDim() / 2);
-			float color3[] = { 0.5, 0.5, 0.6, 1 };
-			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color3);
-			glEnable(GL_LIGHTING);
-			glEnable(GL_LIGHT0);
-			track.Show();
-			glDisable(GL_LIGHTING);
-			glDisable(GL_LIGHT0);
-		}glPopMatrix();
-	}
-
-	gl_error = glGetError();
-	if (showMesh){
-		glPushMatrix(); {
-			MyGraphicsTool::LoadTrackBall(&trackBall);
-			drawMeshGlass(mesh);
-		}glPopMatrix();
-	}
-
-	gl_error = glGetError();
-	MyGraphicsTool::SetViewport(MyVec4i(width / 3, 0, width / 3 * 2, height));
+	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix(); {
 		glLoadIdentity();
@@ -648,13 +612,18 @@ void draw(int width, int height){
 			glTranslatef(offsetX[0], offsetY[0], 0);
 			fields[0]->DrawPlanarContourTree();
 			glPopMatrix();
-			if (fields[1] != 0){
+			if (showDiffTree && fields[1] != 0){
+				glPushMatrix();
+				glTranslatef(offsetX[1], offsetY[1], 0);
+				fields[1]->RenderSigDiffTree();
+				glPopMatrix();
+			}
+			else if (fields[1] != 0){
 				glPushMatrix();
 				glTranslatef(offsetX[1], offsetY[1], 0);
 				fields[1]->DrawPlanarContourTree();
 				glPopMatrix();
 			}
-
 			// draw legend
 			fields[0]->DrawLegendSimple(MyVec2f(0.95, 1.9), MyVec2f(1, 2.1));
 
@@ -680,9 +649,123 @@ void draw(int width, int height){
 		}glPopMatrix();
 		glMatrixMode(GL_PROJECTION);
 	}glPopMatrix();
+}
+
+void drawContours(int x, int y, int width, int height){
+	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
+	glPushMatrix(); {
+		MyGraphicsTool::LoadTrackBall(&trackBall);
+		glScalef(-1, -1, -1);
+		glTranslatef(-fields[0]->GetVolume().XDim() / 2,
+			-fields[0]->GetVolume().YDim() / 2,
+			-fields[0]->GetVolume().ZDim() / 2);
+		fields[0]->FlexibleContours();
+		//fields[0]->ShowSelectedVoxes();
+		if (fields[1] != 0) {
+			float color2[] = { 0, 0, 0.6, 1 };
+			//glColor4fv(color2);
+			//fields[1]->FlexibleContours(true, false);
+			fields[1]->FlexibleContours();
+		}
+	}glPopMatrix();
+
+	// draw color patch
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix(); {
+		glLoadIdentity();
+		glOrtho(BOARDER_LEFT, BOARDER_RIGHT, BOARDER_BOTTOM, BOARDER_TOP, -1.0, 1.0);
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix(); {
+			glLoadIdentity();
+			/********* Draw Color Patch ***********/
+			//glDepthFunc(GL_ALWAYS);
+			float leftBottomQuad1[] = { 0.7, 0.02 };
+			float leftBottomQuad2[] = { 0.7, 0.05 };
+			float sizeQuad = 0.02;
+			glBegin(GL_QUADS);
+			//glColor4f(1, 0, 0, 1);
+			glColor3fv(contourColor[0]);
+			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
+			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
+			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
+			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
+			glEnd();
+			glColor4f(0, 0, 0, 1);
+			// give them some outline
+			glBegin(GL_LINE_LOOP);
+			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
+			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
+			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
+			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
+			glEnd();
+			glRasterPos2f(leftBottomQuad1[0] + sizeQuad + 0.005, leftBottomQuad1[1]);
+			glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[0]->GetName().c_str());
+
+			if (fields[1]){
+				glBegin(GL_QUADS);
+				//glColor4f(0, 0, 1, 1);
+				glColor3fv(contourColor[1]);
+				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
+				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
+				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
+				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
+				glEnd();
+				glColor4f(0, 0, 0, 1);
+				glBegin(GL_LINE_LOOP);
+				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
+				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
+				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
+				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
+				glEnd();
+				glRasterPos2f(leftBottomQuad2[0] + sizeQuad + 0.005, leftBottomQuad2[1]);
+				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[1]->GetName().c_str());
+			}
+			//glDepthFunc(GL_LESS);
+		}
+		glPopMatrix();
+		glMatrixMode(GL_PROJECTION);
+	}
+	glPopMatrix();
+}
+
+void drawTracks(int x, int y, int width, int height){
+	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
+	if (showTracks){
+		glPushMatrix(); {
+			MyGraphicsTool::LoadTrackBall(&trackBall);
+			glTranslatef(-fields[0]->GetVolume().XDim() / 2,
+				-fields[0]->GetVolume().YDim() / 2,
+				-fields[0]->GetVolume().ZDim() / 2);
+			float color3[] = { 0.5, 0.5, 0.6, 1 };
+			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color3);
+			glEnable(GL_LIGHTING);
+			glEnable(GL_LIGHT0);
+			track.Show();
+			glDisable(GL_LIGHTING);
+			glDisable(GL_LIGHT0);
+		}glPopMatrix();
+	}
+}
+
+void drawMesh(int x, int y, int width, int height){
+	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
+	if (showMesh){
+		glPushMatrix(); {
+			MyGraphicsTool::LoadTrackBall(&trackBall);
+			drawMeshGlass(mesh);
+		}glPopMatrix();
+	}
+}
+
+void draw(int width, int height){
+	glClearColor(1, 1, 1, 0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	drawContourTrees(width / 3, 0, width / 3 * 2, height);
+	drawContours(0, 0, width / 3, height);
 
 
-	MyGraphicsTool::SetViewport(MyVec4i(0, 0, width / 3, height));
+
 
 	/*
 	glMatrixMode(GL_PROJECTION);
@@ -708,65 +791,6 @@ void draw(int width, int height){
 		glMatrixMode(GL_PROJECTION);
 	}glPopMatrix();
 	*/
-
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix(); {
-		glLoadIdentity();
-		glOrtho(BOARDER_LEFT, BOARDER_RIGHT, BOARDER_BOTTOM, BOARDER_TOP, -1.0, 1.0);
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix(); {
-			glLoadIdentity();
-
-
-			/********* Draw Color Patch ***********/
-			//glDepthFunc(GL_ALWAYS);
-			float leftBottomQuad1[] = { 0.7, 0.02 };
-			float leftBottomQuad2[] = { 0.7, 0.05 };
-			float sizeQuad = 0.02;
-			glBegin(GL_QUADS);
-			glColor4f(1, 0, 0, 1);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
-			glEnd();
-			glColor4f(0, 0, 0, 1);
-			// give them some outline
-			glBegin(GL_LINE_LOOP);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
-			glEnd();
-			glRasterPos2f(leftBottomQuad1[0] + sizeQuad + 0.005, leftBottomQuad1[1]);
-			glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[0]->GetName().c_str());
-
-			if (fields[1]){
-				glBegin(GL_QUADS);
-				glColor4f(0, 0, 1, 1);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
-				glEnd();
-				glColor4f(0, 0, 0, 1);
-				glBegin(GL_LINE_LOOP);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
-				glEnd();
-				glRasterPos2f(leftBottomQuad2[0] + sizeQuad + 0.005, leftBottomQuad2[1]);
-				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[1]->GetName().c_str());
-			}
-			//glDepthFunc(GL_LESS);
-		}
-		glPopMatrix();
-		glMatrixMode(GL_PROJECTION);
-	}
-	glPopMatrix();
-
-	gl_error = glGetError();
 }
 /**************************************** UI Callback********************/
 
@@ -874,6 +898,7 @@ void updatePruning(int control){
 			fields[0]->ComputeArcNames();
 			fields[0]->SetIsosurface(isovalue);
 			fields[0]->SetNodeXPositionsExt(defaultScale);
+			if (showDiffTree) fields[0]->UpdateSigArcList();
 		}
 		if (fields[1]){
 			fields[1]->ClearComparedArcs();
@@ -882,12 +907,28 @@ void updatePruning(int control){
 			fields[1]->ComputeArcNames();
 			fields[1]->SetIsosurface(isovalue);
 			fields[1]->SetNodeXPositionsExt(defaultScale);
+
+			if (showDiffTree) fields[1]->SyncSigArcsTo(fields[0]);
+
 			updateScaleWidth();
 		}
-		//if (glutGetWindow() != main_window)
-		//	glutSetWindow(main_window);
-		//glutPostRedisplay();
-		cout << "Redisplay called.\n";
+	}
+}
+
+
+void updateSigArcs(int control){
+	if (control == 2){
+		//return;
+		if (fields[0]){
+			fields[0]->SetSigArcThreshold_P(sigArcP);
+			fields[0]->SetSigArcThreshold_VolRatio(sigArcVr);
+			if (showDiffTree) fields[0]->UpdateSigArcList();
+		}
+		if (fields[1]){
+			fields[1]->SetSigArcThreshold_P(sigArcP);
+			fields[1]->SetSigArcThreshold_VolRatio(sigArcVr);
+			if (showDiffTree) fields[1]->SyncSigArcsTo(fields[0]);
+		}
 	}
 }
 
@@ -906,6 +947,7 @@ void myGlutKeyboard(unsigned char Key, int x, int y)
 	case 'R':
 		if(showTracks) track.LoadShader();
 		fields[0]->ReCompileShaders();
+		fields[0]->CompileContourShader();
 		CompileShader();
 		LoadFisheyeVertexData();
 		break;
@@ -937,7 +979,28 @@ void myGlutMouse(int button, int state, int x, int y)
 			dragFocus = DRAG_FOCUS_VOL_0;
 
 			// test read pixels
-
+			int  *pixels = new int[windowWidth*DSR_FACTOR_X * windowHeight*DSR_FACTOR_Y * 4];
+			glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
+			glReadBuffer(GL_COLOR_ATTACHMENT0 + 1);
+			glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
+				GL_RGBA_INTEGER, GL_INT, pixels);
+			//glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
+			//	GL_RGBA, GL_FLOAT, pixels);
+			cout << "Clicked Color: " 
+				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4] << ", "
+				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 1] << ", "
+				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2] << ", "
+				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3] << endl;
+			long arcID = pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
+			long ctID = pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
+			if (arcID < 999999 && ctID<=1 && ctID >=0){
+				if (fields[ctID]){
+					fields[ctID]->ClickComparedArc(arcID);
+					if (fields[1 - ctID]) fields[1 - ctID]->CompareArcs(fields[ctID]);
+				}
+				updateLayout(-1);
+			}
+			delete[] pixels;
 		}
 		else {
 			int fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
@@ -1056,31 +1119,46 @@ void myGlutMotion(int x, int y)
 
 void myGlutDisplay(void)
 {
+	glClearColor(1, 1, 1, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, drawBuffer.frameBuffer);
-	draw(windowWidth*DSR_FACTOR_X, windowHeight*DSR_FACTOR_Y);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	drawContourTrees(0, 0, drawBuffer.width, drawBuffer.height);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	glClearColor(1, 1, 1, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	if (isMagnifying){
 		if (useFisyeye){
 			glBindFramebuffer(GL_FRAMEBUFFER, fishEyeFBO.frameBuffer);
 			RenderFisheyeTexture(drawBuffer.colorTexture, 
-				windowWidth*DSR_FACTOR_X, windowHeight*DSR_FACTOR_Y);
+				fishEyeFBO.width, fishEyeFBO.height);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			RenderTexture(fishEyeFBO.colorTexture);
+			RenderTexture(fishEyeFBO.colorTexture, windowWidth / 3, 0, windowWidth * 2 / 3, windowHeight);
 			//RenderFisheyeTexture(drawBuffer.colorTexture,
 			//	windowWidth, windowHeight);
 		}
 		else{
-			RenderTexture(drawBuffer.colorTexture);
-			RenderZoomedTexture(drawBuffer.colorTexture);
+			RenderTexture(drawBuffer.colorTexture, windowWidth / 3, 0, windowWidth * 2 / 3, windowHeight);
+			RenderZoomedTexture(drawBuffer.colorTexture, windowWidth / 3, 0, windowWidth * 2 / 3, windowHeight);
 		}
 	}
 	else{
-		RenderTexture(drawBuffer.colorTexture);
+		RenderTexture(drawBuffer.colorTexture, windowWidth / 3, 0, windowWidth * 2 / 3, windowHeight);
 	}
+	glEnable(GL_DEPTH_TEST);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
+	GLint initNames[] = { -1, -1, -1, -1 };
+	glClearBufferiv(GL_COLOR, 1, initNames);
+
+	drawContours(0, 0, contourBuffer.width, contourBuffer.height);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//RenderTexture(contourBuffer.colorTexture, 0, 0, windowWidth / 3, windowHeight);
+	drawContours(0, 0, windowWidth / 3, windowHeight);
+
+	drawTracks(0, 0, windowWidth / 3, windowHeight);
+	drawMesh(0, 0, windowWidth / 3, windowHeight);
+	glDisable(GL_DEPTH_TEST);
 	glutSwapBuffers();
 }
 
@@ -1102,18 +1180,22 @@ void myGlutReshape(int x, int y)
 	//	fields[1]->SetupVolomeRenderingBuffers(windowWidth / 3, windowHeight);
 	//	fields[1]->MarkSelectedVoxes();
 	//}
-	drawBuffer.width = tw*DSR_FACTOR_X;
+	drawBuffer.width = tw*DSR_FACTOR_X * 2.0 / 3;
 	drawBuffer.height = th*DSR_FACTOR_Y;
-	fishEyeFBO.width = tw*DSR_FACTOR_X;
+	fishEyeFBO.width = tw*DSR_FACTOR_X * 2.0 / 3;
 	fishEyeFBO.height = th*DSR_FACTOR_Y;
+	contourBuffer.width = tw*DSR_FACTOR_X / 3;
+	contourBuffer.height = th*DSR_FACTOR_Y;
 	meshfbo.width = tw / 3 * DSR_FACTOR_X;
 	meshfbo.height = th * DSR_FACTOR_Y;
 	BuildGLBuffers(drawBuffer);
 	BuildGLBuffers(fishEyeFBO);
+	BuildGLBuffers(contourBuffer, true);
 	if(showMesh) BuildGLBuffers(meshfbo);
 
-
-	fields[0]->SetupVolomeRenderingBuffers(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
+	fields[0]->BuildGLContourBuffer(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
+	if(fields[1]) fields[1]->BuildGLContourBuffer(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
+	//fields[0]->SetupVolomeRenderingBuffers(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
 
 	glutPostRedisplay();
 }
@@ -1155,8 +1237,8 @@ int main(int argc, char* argv[])
 	/****************************************/
 
 	if (showTracks){
+		track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\dti.trk");
 		//track.Read("ACR.trk");
-		track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\ACR.trk");
 		track.SetShape(MyTracks::TRACK_SHAPE_LINE);
 		//track.SetShape(MyTracks::TRACK_SHAPE_TUBE);
 		track.ComputeGeometry();
@@ -1169,16 +1251,25 @@ int main(int argc, char* argv[])
 	fields[0] = new MyContourTree(nArg, argv1);
 	fields[0]->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
 	fields[0]->LoadLabelTable("GOBS_look_up_table.txt");
-	fields[0]->SetName("Schizophrenia");
+	fields[0]->SetName("Control");
 	fields[0]->SetPruningThreshold(pruningThreshold);
 	fields[0]->PruneNoneROIs();
 	fields[0]->ComputeArcNames();
 	fields[0]->SetIsosurface(isovalue);
 	fields[0]->SetNodeXPositionsExt(defaultScale);
+	fields[0]->SetContourColour(contourColor[0]);
+	fields[0]->SetIndex(0);
+	fields[0]->CompileContourShader();
 
+	if (showTracks){
+		fields[0]->MarkSelectedVoxes();
+		track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+	}
 
-	fields[0]->MarkSelectedVoxes();
-	track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+	if (showDiffTree){
+		fields[0]->LoadVoxSignificance("h16e0d1c26_stats_scz122ctr127_tfce_p_tstat4.nii.gz");
+		fields[0]->UpdateSigArcList();
+	}
 
 	if (showSecTree){
 		if (argc > 2){
@@ -1187,12 +1278,18 @@ int main(int argc, char* argv[])
 			fields[1] = new MyContourTree(nArg, argv2);
 			fields[1]->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
 			fields[1]->LoadLabelTable("GOBS_look_up_table.txt");
-			fields[1]->SetName("Control");
+			fields[1]->SetName("Schizophrenia");
 			fields[1]->SetPruningThreshold(pruningThreshold);
 			fields[1]->PruneNoneROIs();
 			fields[1]->ComputeArcNames();
 			fields[1]->SetIsosurface(isovalue);
 			fields[1]->SetNodeXPositionsExt(defaultScale);
+			fields[1]->SetContourColour(contourColor[1]);
+			fields[1]->SetIndex(1);
+			fields[1]->CompileContourShader();
+
+			if (showDiffTree) fields[1]->SyncSigArcsTo(fields[0]);
+
 			updateScaleWidth();
 			MyContourTree::RenameLeaveArcsBySimilarity(fields[0], fields[1]);
 		}
@@ -1232,9 +1329,18 @@ int main(int argc, char* argv[])
 	/***** Control for object params *****/
 	GLUI_Panel* obj_panel = new GLUI_Panel(glui, "Properties");
 	obj_panel->set_alignment(GLUI_ALIGN_LEFT);
-	GLUI_Spinner *spinner = new GLUI_Spinner(obj_panel, "Pruning: ", &pruningThreshold, 2, updatePruning);
-	spinner->set_int_limits(3, 60);
-	spinner->set_alignment(GLUI_ALIGN_LEFT);
+	GLUI_Spinner *pruneSpinner = new GLUI_Spinner(obj_panel, "Pruning: ", &pruningThreshold, 2, updatePruning);
+	pruneSpinner->set_int_limits(1, 60);
+	pruneSpinner->set_int_val(pruningThreshold);
+	pruneSpinner->set_alignment(GLUI_ALIGN_LEFT);
+	GLUI_Spinner *sigArcPSpinner = new GLUI_Spinner(obj_panel, "p value: ", &sigArcP, 2, updateSigArcs);
+	sigArcPSpinner->set_float_limits(0, 1);
+	sigArcPSpinner->set_float_val(sigArcP);
+	sigArcPSpinner->set_alignment(GLUI_ALIGN_LEFT);
+	GLUI_Spinner *sigArcVrSpinner = new GLUI_Spinner(obj_panel, "Vol Overlap: ", &sigArcVr, 2, updateSigArcs);
+	sigArcVrSpinner->set_float_limits(0, 1);
+	sigArcVrSpinner->set_float_val(sigArcVr);
+	sigArcVrSpinner->set_alignment(GLUI_ALIGN_LEFT);
 
 	/***** Control for layout params *****/
 	GLUI_Panel* layoutPanel_base = new GLUI_Panel(glui, "Layout");
@@ -1318,9 +1424,9 @@ int main(int argc, char* argv[])
 	new GLUI_StaticText(magnifier_panel, "Radius");
 	GLUI_Scrollbar* magnifier_radiusSlider = new GLUI_Scrollbar
 		(magnifier_panel, "Magnify Radius", GLUI_SCROLL_HORIZONTAL, &magnifier_radius);
-	backAlphaSlider->set_int_limits(20, 300);
-	backAlphaSlider->set_int_val(magnifier_radius);
-	backAlphaSlider->set_alignment(GLUI_ALIGN_LEFT);
+	magnifier_radiusSlider->set_int_limits(0, 600);
+	magnifier_radiusSlider->set_int_val(magnifier_radius);
+	magnifier_radiusSlider->set_alignment(GLUI_ALIGN_LEFT);
 	new GLUI_StaticText(magnifier_panel, "Scale");
 	GLUI_Scrollbar* magnifier_scaleSlider = new GLUI_Scrollbar
 		(magnifier_panel, "Magnify Scale", GLUI_SCROLL_HORIZONTAL, &magnifier_scale);

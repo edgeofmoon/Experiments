@@ -249,6 +249,12 @@
     <ClCompile Include="MySpaceFillingNaive.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MyContourTree_ContourDrawing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyContourTree_DiffTree.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -491,6 +497,12 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="tube.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="contour.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="contour.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

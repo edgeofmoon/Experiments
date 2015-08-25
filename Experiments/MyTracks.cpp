@@ -437,12 +437,8 @@ void MyTracks::LoadShader(){
 	}
 
 	glDeleteProgram(mShaderProgram);
-	mShaderProgram = InitShader("tube.vert", "tube.frag", "fragColour");
+	mShaderProgram = InitShader("contour.vert", "contour.frag", "fragColour", "name");
 
-	mTexUniform = glGetUniformLocation(mShaderProgram, "texUnit");
-	if (mTexUniform < 0) {
-		cerr << "Shader did not contain the 'texUnit' uniform." << endl;
-	}
 	mNormalAttribute = glGetAttribLocation(mShaderProgram, "normal");
 	if (mNormalAttribute < 0) {
 		cerr << "Shader did not contain the 'normal' attribute." << endl;
@@ -450,18 +446,6 @@ void MyTracks::LoadShader(){
 	mPositionAttribute = glGetAttribLocation(mShaderProgram, "position");
 	if (mPositionAttribute < 0) {
 		cerr << "Shader did not contain the 'position' attribute." << endl;
-	}
-	mTexCoordAttribute = glGetAttribLocation(mShaderProgram, "texCoord");
-	if (mTexCoordAttribute < 0) {
-		cerr << "Shader did not contain the 'texCoord' attribute." << endl;
-	}
-	mRadiusAttribute = glGetAttribLocation(mShaderProgram, "radius");
-	if (mRadiusAttribute < 0) {
-		cerr << "Shader did not contain the 'radius' attribute." << endl;
-	}
-	mColorAttribute = glGetAttribLocation(mShaderProgram, "color");
-	if (mColorAttribute < 0) {
-		cerr << "Shader did not contain the 'color' attribute." << endl;
 	}
 }
 

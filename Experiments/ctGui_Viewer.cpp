@@ -40,6 +40,8 @@ MyTracks track;
 int windowWidth = 1800;
 int windowHeight = 800;
 
+// for pick up region names
+int* nameMap = 0;
 // for contour trees
 frameBuffer drawBuffer;
 // for contours
@@ -126,6 +128,12 @@ GLuint meshVertexArray;
 GLuint meshVertexBuffer;
 GLuint meshNormalBuffer;
 GLuint meshIndexBuffer;
+
+bool drawInPlaceHist = false;
+float inPlaceHistX, inPlaceHistY;
+int inPlaceHistCtId, inPlaceHistArcId;
+bool drawHoverContur = false;
+int hoverCtID, hoverArcID;
 
 int LoadMeshShaderData(){
 	glGenVertexArrays(1, &meshVertexArray);
@@ -372,8 +380,8 @@ int dragFocus;
 
 /**************************************** UI ********************/
 GLUI* glui;
-GLUI_Panel* snap_panel;
-GLUI_Panel* altZoom_panel;
+GLUI_Rollout* snap_panel;
+GLUI_Rollout* altZoom_panel;
 int   main_window;
 MyTrackBall trackBall;
 bool isRotating = false;
@@ -389,6 +397,10 @@ float UI_contourTreeAlpha_front = 1;
 float UI_contourTreeAlpha_back = 1;
 int UI_drawTracks = 1;
 int UI_drawMesh = 1;
+int UI_drawROI = 0;
+GLUI_Spinner* roiRatioSpinner;
+float UI_roiRatio = 0.9;
+int UI_diff = 1;
 
 #define UI_ALTSCALE_ID 4
 
@@ -456,13 +468,38 @@ void selectArc(int x, int y, int field){
 		if (ctx - offsetX[field] < 0){
 			float value = cty - offsetY[field];
 			fields[field]->SetIsosurface(value);
+			fields[field]->UpdateContours();
 		}
 	}
 	else{
 		float newHt = cty - offsetY[field];
 		fields[field]->SelectComponent(arcID, newHt);
+		fields[field]->UpdateContours();
 	}
 
+}
+
+void aggregateArc(int x, int y, int field){
+	float ctx, cty;
+	screen2ctspace(x, y, ctx, cty);
+	long arc = fields[field]->PickArc(ctx - offsetX[field], cty - offsetY[field]);
+	if (arc != -1){
+		if (!fields[field]->IsArcAggregated(arc)){
+			fields[field]->AggregateArcFromAbove(arc);
+		}
+		else{
+			fields[field]->RestoreAggregatedArc(arc);
+		}
+		fields[field]->ComputeArcNames();
+		fields[field]->SetNodeXPositionsExt(defaultScale);
+	}
+	else{
+		if (ctx - offsetX[field] < 0){
+			float value = cty - offsetY[field];
+			fields[field]->SetIsosurface(value);
+			fields[field]->UpdateContours();
+		}
+	}
 }
 
 void updateScaleWidth(){
@@ -659,13 +696,21 @@ void drawContours(int x, int y, int width, int height){
 		glTranslatef(-fields[0]->GetVolume().XDim() / 2,
 			-fields[0]->GetVolume().YDim() / 2,
 			-fields[0]->GetVolume().ZDim() / 2);
-		fields[0]->FlexibleContours();
+		//fields[0]->FlexibleContours();
+		fields[0]->RenderContours();
 		//fields[0]->ShowSelectedVoxes();
+		if (UI_drawROI){
+			fields[0]->RenderAllUpperLeaveContours(UI_roiRatio);
+		}
 		if (fields[1] != 0) {
 			float color2[] = { 0, 0, 0.6, 1 };
 			//glColor4fv(color2);
 			//fields[1]->FlexibleContours(true, false);
-			fields[1]->FlexibleContours();
+			//fields[1]->FlexibleContours();
+			fields[1]->RenderContours();
+		}
+		if (drawHoverContur){
+			fields[hoverCtID]->DrawArcContour(hoverArcID);
 		}
 	}glPopMatrix();
 
@@ -802,6 +847,34 @@ void updateAlpha(int control){
 void updateComponent(int control){
 	showTracks = (UI_drawTracks == 1);
 	showMesh = (UI_drawMesh == 1);
+}
+
+void updateDiff(int control){
+	if (fields[1]){
+		switch (UI_diff)
+		{
+		case 0:
+			fields[1]->SetArcCombineMode(MyContourTree::ArcCombineMode_Intersection);
+			break;
+		case 2:
+			fields[1]->SetArcCombineMode(MyContourTree::ArcCombineMode_Complement);
+			break;
+		case 1:
+		default:
+			fields[1]->SetArcCombineMode(MyContourTree::ArcCombineMode_Union);
+			break;
+		}
+		fields[1]->SyncSigArcsTo(fields[0]);
+	}
+}
+
+void updateROI(int control){
+	if (!UI_drawROI){
+		roiRatioSpinner->disable();
+	}
+	else{
+		roiRatioSpinner->enable();
+	}
 }
 
 void updateSnapPos(int control){
@@ -979,20 +1052,20 @@ void myGlutMouse(int button, int state, int x, int y)
 			dragFocus = DRAG_FOCUS_VOL_0;
 
 			// test read pixels
-			int  *pixels = new int[windowWidth*DSR_FACTOR_X * windowHeight*DSR_FACTOR_Y * 4];
 			glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
 			glReadBuffer(GL_COLOR_ATTACHMENT0 + 1);
 			glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
-				GL_RGBA_INTEGER, GL_INT, pixels);
+				GL_RGBA_INTEGER, GL_INT, nameMap);
 			//glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
 			//	GL_RGBA, GL_FLOAT, pixels);
+			//for (int i = 0; i < contourBuffer.width*contourBuffer.height * 4; i++) if(pixels[i]>0) cout << pixels[i];
 			cout << "Clicked Color: " 
-				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4] << ", "
-				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 1] << ", "
-				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2] << ", "
-				<< pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3] << endl;
-			long arcID = pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
-			long ctID = pixels[(windowHeight - y)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
+				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4] << ", "
+				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 1] << ", "
+				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2] << ", "
+				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3] << endl;
+			long arcID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
+			long ctID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
 			if (arcID < 999999 && ctID<=1 && ctID >=0){
 				if (fields[ctID]){
 					fields[ctID]->ClickComparedArc(arcID);
@@ -1000,14 +1073,18 @@ void myGlutMouse(int button, int state, int x, int y)
 				}
 				updateLayout(-1);
 			}
-			delete[] pixels;
 		}
 		else {
 			int fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
 			if (button == GLUT_LEFT_BUTTON){
-				selectArc(x - windowWidth / 3, windowHeight - y, fieldIdx);
-				fields[0]->MarkSelectedVoxes();
-				track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+				if (glutGetModifiers() == GLUT_ACTIVE_ALT){
+					aggregateArc(x - windowWidth / 3, windowHeight - y, fieldIdx);
+				}
+				else{
+					selectArc(x - windowWidth / 3, windowHeight - y, fieldIdx);
+					fields[0]->MarkSelectedVoxes();
+					track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+				}
 				dragFocus = DRAG_FOCUS_TREE_0 + fieldIdx;
 			}
 			else if (button == GLUT_RIGHT_BUTTON){
@@ -1073,6 +1150,7 @@ void myGlutMotion(int x, int y)
 				screen2ctspace(x, windowHeight - y, ctx, cty);
 				float newHt = cty - offsetY[0];
 				fields[0]->UpdateSelection(newHt);
+				fields[0]->UpdateContours();
 				fields[0]->MarkSelectedVoxes();
 				track.FilterByVolumeMask(fields[0]->GetMaskVolume());
 			}
@@ -1105,6 +1183,7 @@ void myGlutMotion(int x, int y)
 					screen2ctspace(x, windowHeight - y, ctx, cty);
 					float newHt = cty - offsetY[1];
 					fields[1]->UpdateSelection(newHt);
+					fields[1]->UpdateContours();
 					//fields[1]->MarkSelectedVoxes();
 				}
 			}
@@ -1115,6 +1194,57 @@ void myGlutMotion(int x, int y)
 		magnifier_yPos = windowHeight - y;
 	}
 	glutPostRedisplay();
+}
+
+void myGlutPassiveMotion(int x, int y){
+	if (x < windowWidth / 3){
+		if (drawHoverContur){
+			drawHoverContur = false;
+			glutPostRedisplay();
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
+		glReadBuffer(GL_COLOR_ATTACHMENT0 + 1);
+		glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
+			GL_RGBA_INTEGER, GL_INT, nameMap);
+		long arcID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
+		long ctID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
+		if (arcID < 999999 && ctID <= 1 && ctID >= 0){
+			drawInPlaceHist = true;
+			//cout << "CtID: " << ctID << ", ArcID: " << arcID << endl;
+			inPlaceHistX = x;
+			inPlaceHistY = windowHeight - y;
+			inPlaceHistCtId = ctID;
+			inPlaceHistArcId = arcID;
+			glutPostRedisplay();
+		}
+		else if (drawInPlaceHist){
+			drawInPlaceHist = false;
+			glutPostRedisplay();
+		}
+	}
+	else {
+		if (drawInPlaceHist){
+			drawInPlaceHist = false;
+			glutPostRedisplay();
+		}
+
+		hoverCtID = -1;
+		int fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
+		float ctx, cty;
+		screen2ctspace(x - windowWidth / 3, windowHeight - y, ctx, cty);
+		long arcID = fields[fieldIdx]->PickArc(ctx - offsetX[fieldIdx], cty - offsetY[fieldIdx], false);
+		if (arcID >= 0){
+			drawHoverContur = true;
+			hoverCtID = fieldIdx;
+			hoverArcID = arcID;
+			glutPostRedisplay();
+		}
+		else if (drawHoverContur){
+			drawHoverContur = false;
+			glutPostRedisplay();
+		}
+		//cout << "Hover ct: " << hoverCtID << ", Arc: " << hoverArcID << endl;
+	}
 }
 
 void myGlutDisplay(void)
@@ -1148,6 +1278,7 @@ void myGlutDisplay(void)
 	glEnable(GL_DEPTH_TEST);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	GLint initNames[] = { -1, -1, -1, -1 };
 	glClearBufferiv(GL_COLOR, 1, initNames);
 
@@ -1159,6 +1290,27 @@ void myGlutDisplay(void)
 	drawTracks(0, 0, windowWidth / 3, windowHeight);
 	drawMesh(0, 0, windowWidth / 3, windowHeight);
 	glDisable(GL_DEPTH_TEST);
+
+	// draw inplace histogram
+	glViewport(0, 0, windowWidth / 3, windowHeight);
+	glDepthFunc(GL_ALWAYS);
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	glOrtho(0, 1, 0, 1, -1, 1);
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+	if (drawInPlaceHist){
+		fields[inPlaceHistCtId]->DrawArcHistogramAt(
+			inPlaceHistArcId, inPlaceHistX / (float)(windowWidth / 3),
+			inPlaceHistY / (float)windowHeight, 2, 0.5);
+	}
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glDepthFunc(GL_LESS);
+
 	glutSwapBuffers();
 }
 
@@ -1191,10 +1343,10 @@ void myGlutReshape(int x, int y)
 	BuildGLBuffers(drawBuffer);
 	BuildGLBuffers(fishEyeFBO);
 	BuildGLBuffers(contourBuffer, true);
+	if (nameMap) delete[] nameMap;
+	nameMap = new int[contourBuffer.width*contourBuffer.height * 4];
 	if(showMesh) BuildGLBuffers(meshfbo);
 
-	fields[0]->BuildGLContourBuffer(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
-	if(fields[1]) fields[1]->BuildGLContourBuffer(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
 	//fields[0]->SetupVolomeRenderingBuffers(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
 
 	glutPostRedisplay();
@@ -1223,6 +1375,7 @@ int main(int argc, char* argv[])
 	GLUI_Master.set_glutMouseFunc(myGlutMouse);
 	GLUI_Master.set_glutReshapeFunc(myGlutReshape);
 	glutMotionFunc(myGlutMotion);
+	glutPassiveMotionFunc(myGlutPassiveMotion);
 
 	/****************************************/
 	/*         Here's the GLSL code         */
@@ -1260,6 +1413,8 @@ int main(int argc, char* argv[])
 	fields[0]->SetContourColour(contourColor[0]);
 	fields[0]->SetIndex(0);
 	fields[0]->CompileContourShader();
+	fields[0]->BuildContourGeomeryBuffer();
+	fields[0]->UpdateContours();
 
 	if (showTracks){
 		fields[0]->MarkSelectedVoxes();
@@ -1274,7 +1429,6 @@ int main(int argc, char* argv[])
 	if (showSecTree){
 		if (argc > 2){
 			char* argv2[] = { argv[0], argv[2] };
-			MyContourTree f2(nArg, argv2);
 			fields[1] = new MyContourTree(nArg, argv2);
 			fields[1]->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
 			fields[1]->LoadLabelTable("GOBS_look_up_table.txt");
@@ -1287,10 +1441,15 @@ int main(int argc, char* argv[])
 			fields[1]->SetContourColour(contourColor[1]);
 			fields[1]->SetIndex(1);
 			fields[1]->CompileContourShader();
+			fields[1]->BuildContourGeomeryBuffer();
+			fields[1]->UpdateContours();
 
 			if (showDiffTree) fields[1]->SyncSigArcsTo(fields[0]);
 
 			updateScaleWidth();
+
+
+			fields[1]->SetNodeXPositionsExt(defaultScale);
 			MyContourTree::RenameLeaveArcsBySimilarity(fields[0], fields[1]);
 		}
 	}
@@ -1354,7 +1513,7 @@ int main(int argc, char* argv[])
 	radioGroup_main->set_int_val(1);
 	radioGroup_main->set_alignment(GLUI_ALIGN_LEFT);
 
-	GLUI_Panel* layoutPanel_alt = new GLUI_Panel(layoutPanel_base, "Alt Mapping Scale");
+	GLUI_Rollout* layoutPanel_alt = new GLUI_Rollout(layoutPanel_base, "Alt Mapping Scale", 0);
 	layoutPanel_alt->set_alignment(GLUI_ALIGN_LEFT);
 	GLUI_RadioGroup* radioGroup_alt = new GLUI_RadioGroup(layoutPanel_alt, &UI_mappingScale_alt, UI_ALTSCALE_ID, updateLayout);
 	new GLUI_RadioButton(radioGroup_alt, "Linear");
@@ -1367,7 +1526,7 @@ int main(int argc, char* argv[])
 	scale_spinner->set_float_limits(.2f, 50.0);
 	scale_spinner->set_alignment(GLUI_ALIGN_LEFT);
 
-	GLUI_Panel* histoSide = new GLUI_Panel(layoutPanel_base, "Histogram Side");
+	GLUI_Rollout* histoSide = new GLUI_Rollout(layoutPanel_base, "Histogram Side", 0);
 	histoSide->set_alignment(GLUI_ALIGN_LEFT);
 	GLUI_RadioGroup* radioGroup1 = new GLUI_RadioGroup(histoSide, &UI_histogramSide, 6, updateLayout);
 	new GLUI_RadioButton(radioGroup1, "Left");
@@ -1376,7 +1535,7 @@ int main(int argc, char* argv[])
 	radioGroup1->set_int_val(2);
 	radioGroup1->set_alignment(GLUI_ALIGN_LEFT);
 
-	GLUI_Panel* comparison_panel = new GLUI_Panel(glui, "Comparison");
+	GLUI_Rollout* comparison_panel = new GLUI_Rollout(glui, "Comparison", 0);
 	comparison_panel->set_alignment(GLUI_ALIGN_LEFT);
 	GLUI_RadioGroup* radioGroup_comp = new GLUI_RadioGroup(comparison_panel, &UI_comparison, 7, updateComparison);
 	new GLUI_RadioButton(radioGroup_comp, "In Place");
@@ -1386,7 +1545,7 @@ int main(int argc, char* argv[])
 	radioGroup_comp->set_alignment(GLUI_ALIGN_LEFT);
 
 
-	snap_panel = new GLUI_Panel(glui, "Snap Position");
+	snap_panel = new GLUI_Rollout(glui, "Snap Position", 0);
 	snap_panel->set_alignment(GLUI_ALIGN_LEFT);
 	snap_panel->disable();
 	GLUI_RadioGroup* radioGroup_snapPos = new GLUI_RadioGroup(snap_panel, &UI_snapPos, 8, updateSnapPos);
@@ -1397,7 +1556,7 @@ int main(int argc, char* argv[])
 	radioGroup_snapPos->set_alignment(GLUI_ALIGN_LEFT);
 
 
-	altZoom_panel = new GLUI_Panel(glui, "Alt View Zoom");
+	altZoom_panel = new GLUI_Rollout(glui, "Alt View Zoom", 0);
 	altZoom_panel->set_alignment(GLUI_ALIGN_LEFT);
 	altZoom_panel->disable();
 	GLUI_Spinner *scaleX_spinner = new GLUI_Spinner(altZoom_panel, "x scale:", &altViewScaleX);
@@ -1419,7 +1578,7 @@ int main(int argc, char* argv[])
 	backAlphaSlider->set_float_val(1);
 
 
-	GLUI_Panel *magnifier_panel = new GLUI_Panel(glui, "Magnifier");
+	GLUI_Rollout *magnifier_panel = new GLUI_Rollout(glui, "Magnifier", 0);
 	magnifier_panel->set_alignment(GLUI_ALIGN_LEFT);
 	new GLUI_StaticText(magnifier_panel, "Radius");
 	GLUI_Scrollbar* magnifier_radiusSlider = new GLUI_Scrollbar
@@ -1441,7 +1600,7 @@ int main(int argc, char* argv[])
 	magnifier_focusRatioSlider->set_alignment(GLUI_ALIGN_LEFT);
 
 
-	GLUI_Panel *component_panel = new GLUI_Panel(glui, "Component");
+	GLUI_Rollout *component_panel = new GLUI_Rollout(glui, "Component", 0);
 	component_panel->set_alignment(GLUI_ALIGN_LEFT);
 	UI_drawTracks = showTracks ? 1 : 0;
 	UI_drawMesh = showMesh ? 1 : 0;
@@ -1449,6 +1608,23 @@ int main(int argc, char* argv[])
 	GLUI_Checkbox* meshCheckbox = new GLUI_Checkbox(component_panel, "Show Mesh", &UI_drawMesh, -1, updateComponent);
 	if (!showTracks) trackCheckbox->disable();
 	if (!showMesh) meshCheckbox->disable();
+
+	GLUI_Rollout *roi_panel = new GLUI_Rollout(glui, "ROI", 0);
+	roi_panel->set_alignment(GLUI_ALIGN_LEFT);
+	GLUI_Checkbox* roiCheckbox = new GLUI_Checkbox(roi_panel, "Show ROI", &UI_drawROI, -1, updateROI);
+	roiRatioSpinner = new GLUI_Spinner(roi_panel, "ROI Ratio: ", &UI_roiRatio, 2, updateROI);
+	roiRatioSpinner->set_float_limits(0, 1);
+	roiRatioSpinner->disable();
+
+
+	GLUI_Rollout* diff_panel = new GLUI_Rollout(glui, "Diff Tree", 0);
+	diff_panel->set_alignment(GLUI_ALIGN_LEFT);
+	if(!showDiffTree) diff_panel->disable();
+	GLUI_RadioGroup* radioGroup_diff = new GLUI_RadioGroup(diff_panel, &UI_diff, 8, updateDiff);
+	new GLUI_RadioButton(radioGroup_diff, "Intersection");
+	new GLUI_RadioButton(radioGroup_diff, "Union");
+	new GLUI_RadioButton(radioGroup_diff, "Complement");
+	radioGroup_diff->set_alignment(GLUI_ALIGN_LEFT);
 
 	glui->set_main_gfx_window(main_window);
 

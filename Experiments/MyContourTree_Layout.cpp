@@ -89,8 +89,26 @@ float MyContourTree::GetArcZoomLevel(long arc) const{
 }
 
 float MyContourTree::getArcWidth(long arc) const{
-	MappingScale scale = GetArcScale(arc);
-	return GetArcWidth(arc, scale);
+	if (IsDiffMode()){
+		if (IsArcSig(arc)){
+			MappingScale scale = GetArcScale(arc);
+			float arcZoom = GetArcZoomLevel(arc);
+			std::map<long, DiffHistogram>::const_iterator itr = mArcDiffHistogram.find(arc);
+			if (itr != mArcDiffHistogram.end()){
+				float width1 = GetHistogramWidth(itr->second.mLeft, scale, arcZoom);
+				float width2 = GetHistogramWidth(itr->second.mRight, scale, arcZoom);
+				return width1 + width2;
+			}
+			else return mNonSigArcWidth;
+		}
+		else{
+			return mNonSigArcWidth;
+		}
+	}
+	else{
+		MappingScale scale = GetArcScale(arc);
+		return GetArcWidth(arc, scale);
+	}
 }
 
 float MyContourTree::GetArcWidth(long arc, MappingScale scale) const{
@@ -490,9 +508,6 @@ float MyContourTree::UpdateSubTreeLayout(long rootNode, long parentNode, float x
 		//float subTreeWidth = getSubTreeWidth(brunchNode, rootNodes[i]);
 		float subTreeWidth = subTreeLayoutWidth(brunchNode, rootNodes[i]);
 		long arc = nodes2Arc(brunchNode, rootNodes[i]);
-		if (supernodes[brunchNode].downList == 37762){
-			int debut = 1;
-		}
 		if (brunchNode>0){
 			if (i < mixStart){
 				// up-zone

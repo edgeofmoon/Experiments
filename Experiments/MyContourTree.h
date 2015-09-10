@@ -84,7 +84,7 @@ public:
 	std::string ComputeArcName(long arc);
 	void ComputeArcNames();
 	long GetArcRoiCount(long arc);
-	int PickArc(float x, float y);
+	int PickArc(float x, float y, bool printInfo = true);
 	void SetPruningThreshold(int thres){ mPruningThreshold = thres; };
 
 protected:
@@ -281,6 +281,7 @@ protected:
 	std::vector<float> mNormals;
 	std::vector<float> mVertices;
 	std::vector<int> mNames;
+	int mNumVertices;
 
 	void RenderContour(long arc);
 	void FollowHierarchicalPathSeed(int sArc, float ht);
@@ -291,7 +292,6 @@ protected:
 	void InterpolateVertex(long x, long y, long z, int edge, float *cubeVert, float ht);
 
 	void LoadContourGeometry();
-	void RenderContours();
 
 	// shader data
 	unsigned int mVertexArray;
@@ -313,28 +313,106 @@ public:
 	void SetIndex(int idx);
 	int GetIndex() const;
 	void CompileContourShader();
-	void BuildGLContourBuffer(int width, int height);
+	void BuildContourGeomeryBuffer();
 	void FlexibleContours();
+	void UpdateContours();
+	void RenderContours();
+
+// for mouse hover quick draw
+protected:
+	class ContourGeometryDataBuffer{
+	public:
+		ContourGeometryDataBuffer(MyContourTree* ct);
+		~ContourGeometryDataBuffer();
+		void LoadGeometry(MyContourTree* ct);
+		unsigned int vertexArray;
+		unsigned int vertexBuffer;
+		unsigned int normalBuffer;
+		unsigned int nameBuffer;
+		unsigned int indexBuffer;
+		unsigned int numVertices;
+	};
+	std::map<long, ContourGeometryDataBuffer*> mArcContourGeometry;
+	void ClearArcContourGeometry();
+	void BuildGeometryDataBuffer();
+
+public:
+	void DrawArcContour(long arc);
+	void RenderAllUpperLeaveContours(float voxelRatio = 0.9);
 
 // for difference tree
+public:
+	enum ArcCombineMode{
+		ArcCombineMode_Intersection = 1,
+		ArcCombineMode_Union = 2,
+		ArcCombineMode_Complement = 3,
+	};
 protected:
+	class SimpleDistribution{
+	public:
+		float mMin, mMax;
+		std::vector<float> mKernelDensity;
+	};
+	class DiffHistogram{
+	public:
+		SimpleDistribution mLeft, mRight;
+	};
+	ArcCombineMode mArcCombineMode;
 	Array3D<float> mVoxSignificance;
 	std::vector<long> mSigArcs;
+	std::map<long, bool> mPathArcs;
 	float mSigArcThreshold_P;
 	float mSigArcThreshold_VolRatio;
 	MyContourTree* mContrastContourTree;
 	// map this arc to that arc
 	// -1 means no corresponding arc mapped
 	std::map<long, long> mArcMap;
+	std::map<long, DiffHistogram> mArcDiffHistogram;
+	bool mDiffMode;
 	void UpdateArcMapping();
+	void UpdatePathArcs();
+	void UpdateDiffHistogram();
 	void DrawArcDiffHistogram(long arc);
 	void DrawSimpleArc(long arc);
+	long GetContrastArc(long arc) const;
+	// input arrays shall be sorted
+	void CombineIndicesSorted(const vector<long>& thisIndices, const vector<long>& thatIndices,
+		vector<long>& combinedIndices);
+	void ComputeDistribution(Array3D<float>& vol, const vector<long>& indices, 
+		SimpleDistribution& distribution, float minValue, float maxValue);
+	void DrawDistribution(float xPos, const SimpleDistribution& distribution, 
+		HistogramSide side, MappingScale scale);
+	bool IsArcSig(long arc) const;
+	bool IsDiffMode() const { return mDiffMode;};
+	float mNonSigArcWidth;
+	float GetHistogramWidth(const SimpleDistribution& hist, MappingScale scale, float arcZoom = 1) const;
 public:
 	void SetSigArcThreshold_P(float p){ mSigArcThreshold_P = p; };
 	void SetSigArcThreshold_VolRatio(float vr){ mSigArcThreshold_VolRatio = vr; };
+	void SetArcCombineMode(ArcCombineMode mode){ mArcCombineMode = mode; };
 	void LoadVoxSignificance(const char* fn);
 	void UpdateSigArcList();
 	void RenderSigDiffTree();
 	void SyncSigArcsTo(MyContourTree* ct);
+
+// for aggregation
+protected:
+	enum ArcAggregation{
+		ArcAggregation_NONE = 1,
+		ArcAggregation_HIDDEN = 2,
+		ArcAggregation_AGGRE = 3,
+	};
+	std::map<long, ArcAggregation> mArcAggregation;
+	std::map<long, Superarc> mArcAggregateRestore;
+	std::map<long, Supernode> mNodeAggregateRestore;
+	std::map<long, std::vector<float*>> mArcAggregateHistogramRestore;
+
+public:
+	bool IsArcAggregated(long arc) const;
+	void AggregateArcFromAbove(long arc);
+	void RestoreAggregatedArc(long arc);
 };
 
+int compareAbsHeight(const float *d1, const float *d2, const float *base);
+
+bool compareHeightLogic(const float *d1, const float *d2);

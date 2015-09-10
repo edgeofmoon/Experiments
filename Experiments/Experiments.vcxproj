@@ -229,6 +229,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="MyContourTree_Aggregate.cpp" />
     <ClCompile Include="MyContourTree_ContourDrawing.cpp" />
     <ClCompile Include="MyContourTree_DiffTree.cpp" />
     <ClCompile Include="MyContourTree_Layout.cpp" />

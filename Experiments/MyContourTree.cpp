@@ -271,6 +271,9 @@ MyContourTree::MyContourTree(int argc, char** argv)
 
 	mSigArcThreshold_P = 0.01;
 	mSigArcThreshold_VolRatio = 0.5;
+	mDiffMode = false;
+	mArcCombineMode = ArcCombineMode_Union;
+	mNonSigArcWidth = 0.0001;
 }
 
 
@@ -640,18 +643,19 @@ void MyContourTree::SetNodeXPositionsExt(MappingScale scale){
 	//LayoutSubTree2(highestNode, -1, 0, 1);
 	updateArcHistograms();
 	mDefaultScale = scale;
+	float rescale = UpdateSubTreeLayout(highestNode, -1, 0, 1);;
 	switch (scale)
 	{
 	case MyContourTree::MappingScale_Linear:
-		mLinearWidthScale *= UpdateSubTreeLayout(highestNode, -1, 0, 1);
+		mLinearWidthScale *= IsDiffMode() ? 1 : rescale;
 		cout << "Linear Scale updated: " << mLinearWidthScale << endl;
 		break;
 	case MyContourTree::MappingScale_Sci:
-		mScientificWidthScale *= UpdateSubTreeLayout(highestNode, -1, 0, 1);
+		mScientificWidthScale *= IsDiffMode() ? 1 : rescale;
 		cout << "Scientific Scale updated: " << mScientificWidthScale << endl;
 		break;
 	case MyContourTree::MappingScale_Log:
-		mLogWidthScale *= UpdateSubTreeLayout(highestNode, -1, 0, 1);
+		mLogWidthScale *= IsDiffMode() ? 1 : rescale;
 		cout << "Log Scale updated: " << mLogWidthScale << endl;
 		break;
 	default:
@@ -1955,6 +1959,10 @@ void MyContourTree::DrawArcHistogram(long arc){
 		glLineWidth(1);
 	}
 
+	if (IsArcAggregated(arc)){
+		glLineWidth(4);
+	}
+
 	float leftHeightScale;
 	float rightHeightScale;
 	switch (mHistogramSide){
@@ -2045,6 +2053,11 @@ void MyContourTree::DrawArcHistogramScientific(long arc){
 	else{
 		glLineWidth(1);
 	}
+	if (IsArcAggregated(arc)){
+		glLineWidth(4);
+	}
+
+
 	float leftHeightScale;
 	float rightHeightScale;
 	switch (mHistogramSide){
@@ -2307,6 +2320,7 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 		}
 	}
 	*/
+	glLineWidth(1.0);
 	DrawContourTreeFrame();
 	GLfloat edge_colour[4] = { 0.0, 0.0, 0.0, mContourTreeAlpha };						//	colour for edges if not coloured	
 
@@ -2568,7 +2582,7 @@ void MyContourTree::DrawSelectedVoxes(bool useDisplayLists, bool pickColours){
 	return;
 }
 
-int MyContourTree::PickArc(float x, float y)								//	picks an arc: returns -1 if it fails
+int MyContourTree::PickArc(float x, float y, bool printInfo)								//	picks an arc: returns -1 if it fails
 { // PickArc()
 	y = MinHeight() + y * (MaxHeight() - MinHeight());					//	convert to the range of heights actually in use
 	float bestDeltaX = 1.0;											//	best distance laterally
@@ -2599,7 +2613,7 @@ int MyContourTree::PickArc(float x, float y)								//	picks an arc: returns -1 
 			whichArc = arc; bestDeltaX = deltaX;
 		};					//	and update "best" so far
 	} // arc loop
-	if (whichArc != NO_SUPERARC){
+	if (whichArc != NO_SUPERARC && printInfo){
 		float maxFA = -1;
 		float minFA = -1;
 		if (mArcNodes[whichArc].size() > 0){

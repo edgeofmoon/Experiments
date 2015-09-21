@@ -34,7 +34,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v120</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -48,7 +48,7 @@
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v120</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -235,6 +235,7 @@
     <ClCompile Include="MyContourTree_Layout.cpp" />
     <ClCompile Include="MyContourTree_Prune.cpp" />
     <ClCompile Include="MyContourTree_VolumeRendering.cpp" />
+    <ClCompile Include="MyDifferenceTree.cpp" />
     <ClCompile Include="MyGraphicsTool.cpp" />
     <ClCompile Include="MyHalfEdgeMesh.cpp" />
     <ClCompile Include="MyImage.cpp" />
@@ -259,6 +260,7 @@
     <ClCompile Include="MyTrackBall.cpp" />
     <ClCompile Include="MyTracks.cpp" />
     <ClCompile Include="MyTracts.cpp" />
+    <ClCompile Include="OSCB.cpp" />
     <ClCompile Include="Ric\adler32.c" />
     <ClCompile Include="Ric\compress.c" />
     <ClCompile Include="Ric\crc32.c" />
@@ -330,6 +332,7 @@
     <ClInclude Include="MyBox.h" />
     <ClInclude Include="MyColor4.h" />
     <ClInclude Include="MyContourTree.h" />
+    <ClInclude Include="MyDifferenceTree.h" />
     <ClInclude Include="MyFrameBuffer.h" />
     <ClInclude Include="MyGraphicsTool.h" />
     <ClInclude Include="MyHalfEdgeMesh.h" />
@@ -349,6 +352,7 @@
     <ClInclude Include="MyTracts.h" />
     <ClInclude Include="MyUtility.h" />
     <ClInclude Include="MyVec.h" />
+    <ClInclude Include="OSCB.h" />
     <ClInclude Include="Ric\crc32.h" />
     <ClInclude Include="Ric\deflate.h" />
     <ClInclude Include="Ric\dtypes.h" />

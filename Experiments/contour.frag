@@ -31,7 +31,7 @@ void main(void)
 	float specular = 0.5*pow(abs(dot(hv,normal)),16);
 	fragColour = vec4(color,1)*(ambient+diffusion);
 	fragColour += vec4(specular,specular,specular,0);
-	fragColour.a = 1;
+	fragColour.a = 0.5;
+	//fragColour.a = pow((1-abs(dot(normal,eyeDir))),2);
 	name = fname;
-	//name = ivec4(123,2,1,1);
 }

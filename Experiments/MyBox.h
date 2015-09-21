@@ -10,7 +10,7 @@ public:
 	MyBox(const MyVec<T,n>& low, const MyVec<T,n>& high);
 	~MyBox(void);
 
-	bool IsIntersected(MyBox<T, n>& box);
+	bool IsIntersected(const MyBox<T, n>& box) const;
 	void Set(const MyVec<T,n>& low, const MyVec<T,n>& high);
 	void SetLow(const MyVec<T,n>& low);
 	void SetHigh(const MyVec<T,n>& high);
@@ -58,7 +58,7 @@ MyBox<T,n>::~MyBox(void){
 }
 
 template<typename T, int n>
-bool MyBox<T, n>::IsIntersected(MyBox<T, n>& box){
+bool MyBox<T, n>::IsIntersected(const MyBox<T, n>& box) const{
 	for (int i = 0; i < n; i++){
 		if (mLow[i]>box.mHigh[i] || mHigh[i] < box.mLow[i])
 			return false;

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <GL/glew.h>
 #include "GL/glui.h"
+#include "OSCB.h"
 
 #include "MyContourTree.h"
 #include "MyGraphicsTool.h"
@@ -10,6 +11,8 @@
 #include "Shader.h"
 #include "MyMesh.h"
 #include "MyTracks.h"
+#include "MyDifferenceTree.h"
+#include "Ric\RicVolume.h"
 
 #define BOARDER_X 0.05
 #define BOARDER_Y 0.05
@@ -343,10 +346,12 @@ void RenderFisheyeTexture(int texture, int width, int height){
 
 /**************************************** Data ********************/
 MyContourTree *fields[] = { 0, 0 };
+MyDifferenceTree* diffTree = 0;
+RicVolume* tbssSigVol = 0;
 //float offsetX[] = { 0, 1.04 };
 //float offsetY[] = { 0, 0 };
-float offsetX[] = { 0, 0 };
-float offsetY[] = { 0, 1.04 };
+float offsetX[] = { 0, 0, 0 };
+float offsetY[] = { 0, BOARDER_TOP + BOARDER_Y + BOARDER_Y_RANGE, BOARDER_TOP + BOARDER_Y };
 float lastOffsetX, lastOffsetY;
 float isovalue = 0.8;
 int pruningThreshold = 10;
@@ -401,6 +406,9 @@ int UI_drawROI = 0;
 GLUI_Spinner* roiRatioSpinner;
 float UI_roiRatio = 0.9;
 int UI_diff = 1;
+int UI_hoverOnContour = 1;
+int UI_hoverOnCt = 0;
+float UI_labelDrawRatio = 1;
 
 #define UI_ALTSCALE_ID 4
 
@@ -413,12 +421,12 @@ void clamp(float& val, float minValue, float maxValue){
 
 void screen2ctspace(int x, int y, float& ctx, float& cty){
 	if (treelayout == LAYOUT_HORIZONTAL){
-		ctx = BOARDER_LEFT + BOARDER_X_RANGE * ((float)x / (windowWidth / 3));
+		ctx = BOARDER_LEFT + BOARDER_X_RANGE * ((float)x / (windowWidth / 3 / 3));
 		cty = BOARDER_BOTTOM + BOARDER_Y_RANGE * ((float)y / windowHeight);
 	}
 	else{
 		ctx = BOARDER_LEFT + BOARDER_X_RANGE * ((float)x / (windowWidth / 3 * 2));
-		cty = BOARDER_BOTTOM + BOARDER_Y_RANGE * ((float)y / (windowHeight / 2));
+		cty = BOARDER_BOTTOM + BOARDER_Y_RANGE * ((float)y / (windowHeight / 3));
 	}
 }
 
@@ -640,10 +648,10 @@ void drawContourTrees(int x, int y, int width, int height){
 			glLoadIdentity();
 			//glOrtho(-0.02, 1.02, -0.02, 1.02, -1.0, 1.0);
 			if (treelayout == LAYOUT_HORIZONTAL){
-				glOrtho(BOARDER_LEFT, BOARDER_RIGHT + BOARDER_X_RANGE, BOARDER_BOTTOM, BOARDER_TOP, -1.0, 1.0);
+				glOrtho(BOARDER_LEFT, BOARDER_RIGHT + BOARDER_X_RANGE*2, BOARDER_BOTTOM, BOARDER_TOP, -1.0, 1.0);
 			}
 			else{
-				glOrtho(BOARDER_LEFT, BOARDER_RIGHT, BOARDER_BOTTOM, BOARDER_TOP + BOARDER_Y_RANGE, -1.0, 1.0);
+				glOrtho(BOARDER_LEFT, BOARDER_RIGHT, BOARDER_BOTTOM, BOARDER_TOP + BOARDER_Y_RANGE*2, -1.0, 1.0);
 			}
 			glPushMatrix();
 			glTranslatef(offsetX[0], offsetY[0], 0);
@@ -651,11 +659,11 @@ void drawContourTrees(int x, int y, int width, int height){
 			glPopMatrix();
 			if (showDiffTree && fields[1] != 0){
 				glPushMatrix();
-				glTranslatef(offsetX[1], offsetY[1], 0);
-				fields[1]->RenderSigDiffTree();
+				glTranslatef(offsetX[2], offsetY[2], 0);
+				diffTree->Show();
 				glPopMatrix();
 			}
-			else if (fields[1] != 0){
+			if (fields[1] != 0){
 				glPushMatrix();
 				glTranslatef(offsetX[1], offsetY[1], 0);
 				fields[1]->DrawPlanarContourTree();
@@ -663,6 +671,13 @@ void drawContourTrees(int x, int y, int width, int height){
 			}
 			// draw legend
 			fields[0]->DrawLegendSimple(MyVec2f(0.95, 1.9), MyVec2f(1, 2.1));
+			if (showDiffTree){
+				glPushMatrix();
+				glTranslatef(0.95, 1.8,0);
+				glScalef(0.05, 0.04, 1);
+				diffTree->ShowLegend();
+				glPopMatrix();
+			}
 
 			// draw arc view
 			if (UI_comparison == 2){
@@ -839,6 +854,104 @@ void draw(int width, int height){
 }
 /**************************************** UI Callback********************/
 
+void updateOpenFile(int control){
+	OpenFileDialog* openFileDialog = new OpenFileDialog();
+	openFileDialog->Flags |= OFN_NOCHANGEDIR;
+	if (openFileDialog->ShowDialog()){
+		std::string str(openFileDialog->FileName);
+		delete openFileDialog;
+		if (control == 0){
+			// change control volume 
+			cout << "Control Updated to " << str << endl;
+			delete fields[0];
+			char filename[300];
+			strcpy_s(filename, 300, str.c_str());
+			char* argv[] = { "notImportant", filename };
+			fields[0] = new MyContourTree(2, argv);
+			fields[0]->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
+			fields[0]->LoadLabelTable("GOBS_look_up_table.txt");
+			fields[0]->SetPruningThreshold(pruningThreshold);
+			fields[0]->PruneNoneROIs();
+			fields[0]->ComputeArcNames();
+			fields[0]->SetIsosurface(isovalue);
+			fields[0]->SetNodeXPositionsExt(defaultScale);
+			fields[0]->SetContourColour(contourColor[0]);
+			fields[0]->SetIndex(0);
+			fields[0]->CompileContourShader();
+			fields[0]->BuildContourGeomeryBuffer();
+			fields[0]->UpdateContours();
+
+			if (showTracks){
+				fields[0]->MarkSelectedVoxes();
+				track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+			}
+
+			if (showDiffTree){
+				fields[0]->LoadVoxSignificance(tbssSigVol);
+				fields[0]->UpdateSigArcList();
+				diffTree->SetContourTrees(fields[0], fields[1]);
+				diffTree->UpdateArcMapping();
+				diffTree->UpdateDifferenceHistogram();
+			}
+
+			if (fields[1]){
+				MyContourTree::RenameLeaveArcsBySimilarity(fields[0], fields[1]);
+			}
+		}
+		else if (control == 1){
+			// change control volume 
+			cout << "Diseased Updated to " << str << endl;
+			delete fields[1];
+			char filename[300];
+			strcpy_s(filename, 300, str.c_str());
+			char* argv[] = { "notImportant", filename };
+			fields[1] = new MyContourTree(2, argv);
+			fields[1]->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
+			fields[1]->LoadLabelTable("GOBS_look_up_table.txt");
+			fields[1]->SetPruningThreshold(pruningThreshold);
+			fields[1]->PruneNoneROIs();
+			fields[1]->ComputeArcNames();
+			fields[1]->SetIsosurface(isovalue);
+			fields[1]->SetNodeXPositionsExt(defaultScale);
+			fields[1]->SetContourColour(contourColor[1]);
+			fields[1]->SetIndex(1);
+			fields[1]->CompileContourShader();
+			fields[1]->BuildContourGeomeryBuffer();
+			fields[1]->UpdateContours();
+
+			if (showDiffTree){
+				fields[1]->SyncSigArcsTo(fields[0]);
+				diffTree->SetContourTrees(fields[0], fields[1]);
+				diffTree->UpdateArcMapping();
+				diffTree->UpdateDifferenceHistogram();
+			}
+
+			updateScaleWidth();
+
+			fields[1]->SetNodeXPositionsExt(defaultScale);
+			MyContourTree::RenameLeaveArcsBySimilarity(fields[0], fields[1]);
+			showSecTree = true;
+		}
+		else if (control == 2){
+			// change control volume 
+			cout << "TBSS stats Updated to " << str << endl;
+			showDiffTree = true;
+			delete tbssSigVol;
+			tbssSigVol = new RicVolume(str);
+			fields[0]->LoadVoxSignificance(tbssSigVol);
+			fields[0]->UpdateSigArcList();
+
+			if (fields[1]) fields[1]->SyncSigArcsTo(fields[0]);
+			if (!diffTree) diffTree = new MyDifferenceTree;
+			diffTree->SetContourTrees(fields[0], fields[1]);
+			diffTree->UpdateArcMapping();
+			diffTree->UpdateDifferenceHistogram();
+
+		}
+	}
+	glutPostRedisplay();
+}
+
 void updateAlpha(int control){
 	if (fields[frontField]) fields[frontField]->SetContourTreeAlpha(UI_contourTreeAlpha_front);
 	if (fields[1 - frontField]) fields[1 - frontField]->SetContourTreeAlpha(UI_contourTreeAlpha_back);
@@ -847,6 +960,13 @@ void updateAlpha(int control){
 void updateComponent(int control){
 	showTracks = (UI_drawTracks == 1);
 	showMesh = (UI_drawMesh == 1);
+}
+
+void updateLabels(int control){
+	if (showDiffTree){
+		diffTree->SetLabelDrawRatio(UI_labelDrawRatio);
+		if (showDiffTree) diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	}
 }
 
 void updateDiff(int control){
@@ -985,6 +1105,11 @@ void updatePruning(int control){
 
 			updateScaleWidth();
 		}
+	}
+
+	if (showDiffTree){
+		diffTree->UpdateArcMapping();
+		diffTree->UpdateDifferenceHistogram();
 	}
 }
 
@@ -1202,12 +1327,15 @@ void myGlutPassiveMotion(int x, int y){
 			drawHoverContur = false;
 			glutPostRedisplay();
 		}
-		glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
-		glReadBuffer(GL_COLOR_ATTACHMENT0 + 1);
-		glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
-			GL_RGBA_INTEGER, GL_INT, nameMap);
-		long arcID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
-		long ctID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
+		long arcID = -1, ctID = -1;
+		if (nameMap && UI_hoverOnContour){
+			glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
+			glReadBuffer(GL_COLOR_ATTACHMENT0 + 1);
+			glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
+				GL_RGBA_INTEGER, GL_INT, nameMap);
+			arcID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
+			ctID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
+		}
 		if (arcID < 999999 && ctID <= 1 && ctID >= 0){
 			drawInPlaceHist = true;
 			//cout << "CtID: " << ctID << ", ArcID: " << arcID << endl;
@@ -1215,10 +1343,13 @@ void myGlutPassiveMotion(int x, int y){
 			inPlaceHistY = windowHeight - y;
 			inPlaceHistCtId = ctID;
 			inPlaceHistArcId = arcID;
+			fields[ctID]->SetContourHoveredArc(arcID);
 			glutPostRedisplay();
 		}
 		else if (drawInPlaceHist){
 			drawInPlaceHist = false;
+			fields[0]->SetContourHoveredArc(-1);
+			if (fields[1]) fields[1]->SetContourHoveredArc(-1);
 			glutPostRedisplay();
 		}
 	}
@@ -1227,12 +1358,14 @@ void myGlutPassiveMotion(int x, int y){
 			drawInPlaceHist = false;
 			glutPostRedisplay();
 		}
-
 		hoverCtID = -1;
-		int fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
-		float ctx, cty;
-		screen2ctspace(x - windowWidth / 3, windowHeight - y, ctx, cty);
-		long arcID = fields[fieldIdx]->PickArc(ctx - offsetX[fieldIdx], cty - offsetY[fieldIdx], false);
+		long arcID = -1, fieldIdx = -1;
+		if (UI_hoverOnCt){
+			fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
+			float ctx, cty;
+			screen2ctspace(x - windowWidth / 3, windowHeight - y, ctx, cty);
+			arcID = fields[fieldIdx]->PickArc(ctx - offsetX[fieldIdx], cty - offsetY[fieldIdx], false);
+		}
 		if (arcID >= 0){
 			drawHoverContur = true;
 			hoverCtID = fieldIdx;
@@ -1346,7 +1479,7 @@ void myGlutReshape(int x, int y)
 	if (nameMap) delete[] nameMap;
 	nameMap = new int[contourBuffer.width*contourBuffer.height * 4];
 	if(showMesh) BuildGLBuffers(meshfbo);
-
+	if (showDiffTree) diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 	//fields[0]->SetupVolomeRenderingBuffers(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
 
 	glutPostRedisplay();
@@ -1357,6 +1490,7 @@ void myGlutReshape(int x, int y)
 
 int main(int argc, char* argv[])
 {
+
 	/****************************************/
 	/*   Initialize GLUT and create window  */
 	/****************************************/
@@ -1404,7 +1538,6 @@ int main(int argc, char* argv[])
 	fields[0] = new MyContourTree(nArg, argv1);
 	fields[0]->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
 	fields[0]->LoadLabelTable("GOBS_look_up_table.txt");
-	fields[0]->SetName("Control");
 	fields[0]->SetPruningThreshold(pruningThreshold);
 	fields[0]->PruneNoneROIs();
 	fields[0]->ComputeArcNames();
@@ -1422,7 +1555,8 @@ int main(int argc, char* argv[])
 	}
 
 	if (showDiffTree){
-		fields[0]->LoadVoxSignificance("h16e0d1c26_stats_scz122ctr127_tfce_p_tstat4.nii.gz");
+		tbssSigVol = new RicVolume("h16e0d1c26_stats_scz122ctr127_tfce_p_tstat4.nii.gz");
+		fields[0]->LoadVoxSignificance(tbssSigVol);
 		fields[0]->UpdateSigArcList();
 	}
 
@@ -1432,7 +1566,6 @@ int main(int argc, char* argv[])
 			fields[1] = new MyContourTree(nArg, argv2);
 			fields[1]->LoadLabelVolume("JHU-WhiteMatter-labels-1mm.nii");
 			fields[1]->LoadLabelTable("GOBS_look_up_table.txt");
-			fields[1]->SetName("Schizophrenia");
 			fields[1]->SetPruningThreshold(pruningThreshold);
 			fields[1]->PruneNoneROIs();
 			fields[1]->ComputeArcNames();
@@ -1448,10 +1581,17 @@ int main(int argc, char* argv[])
 
 			updateScaleWidth();
 
-
-			fields[1]->SetNodeXPositionsExt(defaultScale);
+			//fields[1]->SetNodeXPositionsExt(defaultScale);
 			MyContourTree::RenameLeaveArcsBySimilarity(fields[0], fields[1]);
 		}
+	}
+
+	if (showDiffTree){
+		diffTree = new MyDifferenceTree;
+		diffTree->SetContourTrees(fields[0], fields[1]);
+		diffTree->UpdateArcMapping();
+		diffTree->UpdateDifferenceHistogram();
+		diffTree->UpdateLabels(windowWidth * 2 / 3, windowHeight / 3);
 	}
 
 	if (showMesh){
@@ -1467,12 +1607,16 @@ int main(int argc, char* argv[])
 
 	if (treelayout == LAYOUT_HORIZONTAL)
 	{	
-		offsetX[1] = BOARDER_RIGHT+BOARDER_X;
+		offsetX[1] = BOARDER_RIGHT + BOARDER_X + BOARDER_X_RANGE;
 		offsetY[1] = 0;
+		offsetX[2] = BOARDER_RIGHT + BOARDER_X;
+		offsetY[2] = 0;
 	}
 	else{
 		offsetX[1] = 0 ;
-		offsetY[1] = BOARDER_TOP+BOARDER_Y;
+		offsetY[1] = BOARDER_TOP + BOARDER_Y + BOARDER_Y_RANGE;
+		offsetX[2] = 0;
+		offsetY[2] = BOARDER_TOP + BOARDER_Y;
 	}
 
 	/****************************************/
@@ -1608,11 +1752,15 @@ int main(int argc, char* argv[])
 	GLUI_Checkbox* meshCheckbox = new GLUI_Checkbox(component_panel, "Show Mesh", &UI_drawMesh, -1, updateComponent);
 	if (!showTracks) trackCheckbox->disable();
 	if (!showMesh) meshCheckbox->disable();
+	GLUI_Checkbox* hoverOnContourCheckbox = new GLUI_Checkbox(component_panel, "Contour Hover", &UI_hoverOnContour);
+	GLUI_Checkbox* hoverOnCtCheckbox = new GLUI_Checkbox(component_panel, "Tree Hover", &UI_hoverOnCt);
+	GLUI_Scrollbar* labelDrawRatioScrollbar = new GLUI_Scrollbar(component_panel, "Label Ratio", GLUI_SCROLL_HORIZONTAL, &UI_labelDrawRatio, 1, updateLabels);
+	labelDrawRatioScrollbar->set_float_limits(0, 1);
 
 	GLUI_Rollout *roi_panel = new GLUI_Rollout(glui, "ROI", 0);
 	roi_panel->set_alignment(GLUI_ALIGN_LEFT);
-	GLUI_Checkbox* roiCheckbox = new GLUI_Checkbox(roi_panel, "Show ROI", &UI_drawROI, -1, updateROI);
-	roiRatioSpinner = new GLUI_Spinner(roi_panel, "ROI Ratio: ", &UI_roiRatio, 2, updateROI);
+	GLUI_Checkbox* roiCheckbox = new GLUI_Checkbox(roi_panel, "Show Leave Regions", &UI_drawROI, -1, updateROI);
+	roiRatioSpinner = new GLUI_Spinner(roi_panel, "Region Ratio: ", &UI_roiRatio, 2, updateROI);
 	roiRatioSpinner->set_float_limits(0, 1);
 	roiRatioSpinner->disable();
 
@@ -1625,6 +1773,12 @@ int main(int argc, char* argv[])
 	new GLUI_RadioButton(radioGroup_diff, "Union");
 	new GLUI_RadioButton(radioGroup_diff, "Complement");
 	radioGroup_diff->set_alignment(GLUI_ALIGN_LEFT);
+
+	GLUI_Rollout* data_panel = new GLUI_Rollout(glui, "Change Skeleton Data", 0);
+	data_panel->set_alignment(GLUI_ALIGN_LEFT);
+	new GLUI_Button(data_panel, "Control", 0, updateOpenFile);
+	new GLUI_Button(data_panel, "Diseased", 1, updateOpenFile);
+	new GLUI_Button(data_panel, "TBSS stats", 2, updateOpenFile);
 
 	glui->set_main_gfx_window(main_window);
 

@@ -4,16 +4,14 @@
 #include "MyPrimitiveDrawer.h"
 #include "ColorScaleTable.h"
 
-void MyContourTree::LoadVoxSignificance(const char* fn){
-	RicVolume vol(fn);
-	if (vol.nvox == 0) { printf("Unable to open file %s\n", fn); }
+void MyContourTree::LoadVoxSignificance(RicVolume* vol){
 
 	mVoxSignificance.Construct(xDim, yDim, zDim);
 
 	for (long i = 0; i < xDim; i++){
 		for (long j = 0; j < yDim; j++){
 			for (long k = 0; k < zDim; k++){
-				mVoxSignificance(i, j, k) = vol.vox[i][j][k];
+				mVoxSignificance(i, j, k) = vol->vox[i][j][k];
 			}
 		}
 	}	
@@ -39,6 +37,7 @@ void MyContourTree::UpdateSigArcList(){
 		}
 	}
 
+	UpdatePathArcs();
 	cout << "SigArcs: " << mSigArcs.size() << " / " << nValidArcs << endl;
 }
 
@@ -171,7 +170,6 @@ void MyContourTree::DrawDistribution(float xPos, const SimpleDistribution& distr
 		}
 	}
 	else{
-		float maxBaseHeight = GetDrawingHeight(mMaxHistogramCount, mDefaultScale);
 		for (int i = 0; i < histogram.size(); i++){
 			float baseHeight = GetDrawingHeight(histogram[i], arcScale);
 			float leftHeight = baseHeight * leftHeightScale*arcZoom;
@@ -595,7 +593,7 @@ void MyContourTree::SyncSigArcsTo(MyContourTree* ct){
 	mContrastContourTree = ct;
 	mSigArcs.clear();
 	UpdateArcMapping();
-	mDiffMode = true;
+	//mDiffMode = true;
 	for (std::map<long, long>::iterator itr = mArcMap.begin();
 		itr != mArcMap.end(); itr ++){
 		if (itr->second >= 0){

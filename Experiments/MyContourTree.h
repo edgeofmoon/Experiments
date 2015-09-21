@@ -7,6 +7,7 @@
 #include <map>
 
 class RicVolume;
+class MyDifferenceTree;
 
 class SuperNodeExt{
 public:
@@ -23,6 +24,12 @@ public:
 		minHeight = 0;
 		subTreeLayoutWidth = -1;
 	}
+};
+
+class SimpleDistribution{
+public:
+	float mMin, mMax;
+	std::vector<float> mKernelDensity;
 };
 
 class MyBitmap;
@@ -70,6 +77,7 @@ public:
 	void DrawArcSnappingPoint(long arc);
 	void DrawArcHistogram(long arc);
 	void DrawArcHistogramScientific(long arc);
+	void DrawArcBackLight(long arc);
 	void DrawContourTreeFrame();
 	void DrawArcLabels();
 	void DrawArcLabelsUnoccluded();
@@ -294,6 +302,7 @@ protected:
 	void LoadContourGeometry();
 
 	// shader data
+	void DestoryContourDrawingBuffer();
 	unsigned int mVertexArray;
 	unsigned int mVertexBuffer;
 	unsigned int mNormalBuffer;
@@ -332,11 +341,13 @@ protected:
 		unsigned int indexBuffer;
 		unsigned int numVertices;
 	};
-	std::map<long, ContourGeometryDataBuffer*> mArcContourGeometry;
-	void ClearArcContourGeometry();
-	void BuildGeometryDataBuffer();
+	//std::map<long, ContourGeometryDataBuffer*> mArcContourGeometry;
+	//void ClearArcContourGeometry();
+	//void BuildGeometryDataBuffer();
+	long mContourHoveredArc;
 
 public:
+	void SetContourHoveredArc(long arc){ mContourHoveredArc = arc; };
 	void DrawArcContour(long arc);
 	void RenderAllUpperLeaveContours(float voxelRatio = 0.9);
 
@@ -348,11 +359,7 @@ public:
 		ArcCombineMode_Complement = 3,
 	};
 protected:
-	class SimpleDistribution{
-	public:
-		float mMin, mMax;
-		std::vector<float> mKernelDensity;
-	};
+
 	class DiffHistogram{
 	public:
 		SimpleDistribution mLeft, mRight;
@@ -390,7 +397,7 @@ public:
 	void SetSigArcThreshold_P(float p){ mSigArcThreshold_P = p; };
 	void SetSigArcThreshold_VolRatio(float vr){ mSigArcThreshold_VolRatio = vr; };
 	void SetArcCombineMode(ArcCombineMode mode){ mArcCombineMode = mode; };
-	void LoadVoxSignificance(const char* fn);
+	void LoadVoxSignificance(RicVolume* vol);
 	void UpdateSigArcList();
 	void RenderSigDiffTree();
 	void SyncSigArcsTo(MyContourTree* ct);
@@ -411,6 +418,8 @@ public:
 	bool IsArcAggregated(long arc) const;
 	void AggregateArcFromAbove(long arc);
 	void RestoreAggregatedArc(long arc);
+
+	friend class MyDifferenceTree;
 };
 
 int compareAbsHeight(const float *d1, const float *d2, const float *base);

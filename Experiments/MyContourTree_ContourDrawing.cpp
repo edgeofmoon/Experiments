@@ -265,6 +265,25 @@ void MyContourTree::FlexibleContours(){
 	RenderContours();
 }
 
+void MyContourTree::DestoryContourDrawingBuffer(){
+	if (glIsVertexArray(mVertexArray)){
+		glDeleteVertexArrays(1, &mVertexArray);
+	}
+	if (glIsBuffer(mVertexBuffer)){
+		glDeleteBuffers(1, &mVertexBuffer);
+	}
+	if (glIsBuffer(mNormalBuffer)){
+		glDeleteBuffers(1, &mNormalBuffer);
+	}
+	if (glIsBuffer(mNameBuffer)){
+		glDeleteBuffers(1, &mNameBuffer);
+	}
+	if (glIsBuffer(mIndexBuffer)){
+		glDeleteBuffers(1, &mIndexBuffer);
+	}
+	glDeleteProgram(mContourShaderProgram);
+}
+
 void MyContourTree::LoadContourGeometry(){
 	if (mVertices.size() > 0){
 		glBindBuffer(GL_ARRAY_BUFFER, mVertexBuffer);
@@ -294,6 +313,7 @@ void MyContourTree::LoadContourGeometry(){
 }
 
 void MyContourTree::RenderContours(){
+	glDisable(GL_BLEND);
 	//glBindFramebuffer(GL_FRAMEBUFFER, mFrameBuffer);
 	glUseProgram(mContourShaderProgram);
 	glBindVertexArray(mVertexArray);
@@ -531,6 +551,7 @@ void MyContourTree::ContourGeometryDataBuffer::LoadGeometry(MyContourTree* ct){
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
+/*
 void MyContourTree::ClearArcContourGeometry(){
 	for (std::map<long, ContourGeometryDataBuffer*>::const_iterator itr
 		= mArcContourGeometry.begin();
@@ -539,6 +560,7 @@ void MyContourTree::ClearArcContourGeometry(){
 	}
 	mArcContourGeometry.clear();
 }
+*/
 
 void MyContourTree::DrawArcContour(long arc){
 	/*
@@ -572,6 +594,8 @@ void MyContourTree::DrawArcContour(long arc){
 	vertexArray = geoBuffer->vertexArray;
 	numVertices = geoBuffer->numVertices;
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glUseProgram(mContourShaderProgram);
 	glBindVertexArray(vertexArray);
 

@@ -274,6 +274,8 @@ MyContourTree::MyContourTree(int argc, char** argv)
 	mDiffMode = false;
 	mArcCombineMode = ArcCombineMode_Union;
 	mNonSigArcWidth = 0.0001;
+	mContourHoveredArc = -1;
+	this->SetName(argv[1]);
 }
 
 
@@ -589,6 +591,7 @@ MyContourTree::~MyContourTree()
 	delete[] mValidNodes;
 	delete[] mValidArcs;
 	delete mLabelVolume;
+	DestoryContourDrawingBuffer();
 }
 
 void MyContourTree::LoadLabelVolume(char* fileName){
@@ -1897,6 +1900,24 @@ void MyContourTree::DrawArcHistogramAt(long arc, float x, float y, float scaleX,
 	float histx, histy;
 	GetArcBottomPos(arc, histx, histy);
 	glPushMatrix();
+
+	// draw label	int viewport[4];
+	int viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	float pixelWidth = 1.f / viewport[2];
+	long topNode = superarcs[arc].topID, buttomNode = superarcs[arc].bottomID;
+	float topValue = *supernodes[topNode].value, bottomValue = *supernodes[buttomNode].value;
+	if (mLabelVolume){
+		string name = mArcName[arc];
+		float length = 0;
+		for (int i = 0; i < name.size(); i++){
+			length += glutBitmapWidth(GLUT_BITMAP_TIMES_ROMAN_10, name[i]);
+		}
+		glColor4f(0, 0, 0, 1);
+		glRasterPos2f(x-length*pixelWidth/2, y + (topValue-bottomValue) * scaleY + 0.01);
+		glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)name.c_str());
+	}
+
 	glTranslatef(x, y, 0);
 	glScalef(scaleX, scaleY, 1);
 	glTranslatef(-histx, -histy, 0);
@@ -1906,6 +1927,64 @@ void MyContourTree::DrawArcHistogramAt(long arc, float x, float y, float scaleX,
 	else{
 		DrawArcHistogram(arc);
 	}
+
+	// draw inplace legend
+	glColor4f(0, 0, 0, 1);
+	float micUnit = 0.02;
+	float macUnit = 0.1;
+	int startIdx = ceil(bottomValue / 0.02);
+	int endIdx = floor(topValue / 0.02);
+	float tickLength;
+	for (int idx = startIdx; idx <= endIdx; idx++){
+		if (idx % (int)(macUnit / micUnit + 0.5) == 0){
+			glLineWidth(2);
+			tickLength = 0.004;
+		}
+		else{
+			glLineWidth(1);
+			tickLength = 0.0025;
+		}
+		glBegin(GL_LINES);
+		switch (mHistogramSide){
+		case HistogramSide_Left:
+			glVertex2f(histx, idx*micUnit);
+			glVertex2f(histx + tickLength, idx*micUnit);
+			break;
+		case HistogramSide_Right:
+			glVertex2f(histx, idx*micUnit);
+			glVertex2f(histx - tickLength, idx*micUnit);
+			break;
+		default:
+		case HistogramSide_Sym:
+			glVertex2f(histx - tickLength/2, idx*micUnit);
+			glVertex2f(histx + tickLength/2, idx*micUnit);
+			break;
+		}
+		glEnd();
+	}
+
+	float textXoffset = 0;
+	switch (mHistogramSide){
+	case HistogramSide_Left:
+		textXoffset = 0;
+		break;
+	case HistogramSide_Right:
+		textXoffset = -0.025;
+		break;
+	default:
+	case HistogramSide_Sym:
+		textXoffset = -0.01;
+		break;
+	}
+	glRasterPos2f(histx + textXoffset, bottomValue);
+	string str = to_string(bottomValue);
+	str.resize(5);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)str.c_str());
+	glRasterPos2f(histx + textXoffset, topValue);
+	str = to_string(topValue);
+	str.resize(5);
+	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_10, (const unsigned char*)str.c_str());
+
 	glPopMatrix();
 }
 
@@ -2002,6 +2081,7 @@ void MyContourTree::DrawArcHistogram(long arc){
 		glEnd();
 
 		glColor4f(0, 0, 0, mContourTreeAlpha);
+
 		glBegin(GL_LINES);
 		if (i == 0){
 			glVertex2f(xPos - leftHeight, yStart );
@@ -2151,6 +2231,35 @@ void MyContourTree::DrawArcHistogramScientific(long arc){
 	glDepthFunc(GL_LESS);
 }
 
+void MyContourTree::DrawArcBackLight(long arc){
+	vector<float>& histogram = mArcHistogram[arc];
+	if (histogram.empty()) return;
+	long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+	float xPos;
+	if (supernodesExt[topNode].numLeaves <= supernodesExt[bottomNode].numLeaves){
+		xPos = supernodes[topNode].xPosn;
+	}
+	else{
+		xPos = supernodes[bottomNode].xPosn;
+	}
+	float height = GetDrawingHeight(*max_element(histogram.begin(), histogram.end()), GetArcScale(arc)) / 2;
+
+	float yStart = min(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
+	float yEnd = max(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
+	float yRange = (yEnd - yStart)/2;
+	float yCenter = (yEnd + yStart) / 2;
+
+	glBegin(GL_TRIANGLE_FAN);
+	glColor4f(0, 0, 0, 0.5*mContourTreeAlpha);
+	glVertex2f(xPos, yCenter);
+	glColor4f(1, 1, 1, 0.5);
+	for (int i = 0; i < 21; i++){
+		float angle = i*3.1415926 / 10;
+		glVertex2f(xPos + height*cos(angle) * 1.5, yCenter + yRange*sin(angle) * 1.3);
+	}
+	glEnd();
+}
+
 void MyContourTree::DrawContourTreeFrame(){
 	float boarder_x = 0.035;
 	glColor4f(0, 0, 0, mContourTreeAlpha);
@@ -2285,47 +2394,14 @@ void MyContourTree::DrawPlanarContourTree()		//	draws a planar version of the co
 	float xDiff, xHeight;
 	long x, y, z;
 
-	/*
-	// draw compared arc highlight
-	for (std::map<long, char>::const_iterator it = mArcStatus.begin();
-		it != mArcStatus.end(); ++it){
-		long ctArc = it->first;
-		if (IsArcCompared(ctArc)){
-			vector<float>& histogram = mArcHistogram[ctArc];
-			if (histogram.empty()) return;
-			long topNode = superarcs[ctArc].topID, bottomNode = superarcs[ctArc].bottomID;
-			float xPos;
-			if (supernodesExt[topNode].numLeaves <= supernodesExt[bottomNode].numLeaves){
-				xPos = supernodes[topNode].xPosn;
-			}
-			else{
-				xPos = supernodes[bottomNode].xPosn;
-			}
-			float height = GetDrawingHeight(*max_element(histogram.begin(), histogram.end()), GetArcScale(ctArc)) / 2;
-
-			float yStart = min(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
-			float yEnd = max(supernodes[bottomNode].yPosn, supernodes[topNode].yPosn);
-			float yRange = (yEnd - yStart)/2;
-			float yCenter = (yEnd + yStart) / 2;
-
-			glBegin(GL_TRIANGLE_FAN);
-			glColor4f(0, 0, 0, 0.5);
-			glVertex2f(xPos, yCenter);
-			glColor4f(1, 1, 1, 0.5);
-			for (int i = 0; i < 21; i++){
-				float angle = i*3.1415926 / 10;
-				glVertex2f(xPos + height*cos(angle) * 1.5, yCenter + yRange*sin(angle) * 1.3);
-			}
-			glEnd();
-		}
-	}
-	*/
+	
 	glLineWidth(1.0);
 	DrawContourTreeFrame();
 	GLfloat edge_colour[4] = { 0.0, 0.0, 0.0, mContourTreeAlpha };						//	colour for edges if not coloured	
 
 	for (whichArc = 0; whichArc < nValidArcs; whichArc++){
 		arc = valid[whichArc];
+		if (arc == mContourHoveredArc) DrawArcBackLight(arc);
 		//DrawArcHistogram(arc);
 		if (GetArcScale(arc) == MappingScale_Sci){
 			DrawArcHistogramScientific(arc);

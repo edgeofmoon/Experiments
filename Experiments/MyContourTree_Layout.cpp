@@ -293,6 +293,9 @@ float MyContourTree::subTreeLayoutWidth(long rootNode, long parentNode){
 	for (int i = 0; i < downStart; i++){
 		long brunchNode = brunchNodes[i];
 		float subTreeWidth = subTreeLayoutWidth(brunchNode, rootNodes[i]);
+		if (subTreeWidth < 0.001){
+			subTreeWidth = subTreeLayoutWidth(brunchNode, rootNodes[i]);
+		}
 		if (brunchNode>0){
 			if (i < mixStart){
 				// up-zone

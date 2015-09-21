@@ -258,6 +258,12 @@
     <ClCompile Include="MyContourTree_Aggregate.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MyDifferenceTree.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="OSCB.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -456,6 +462,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="MySpaceFillingNaive.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyDifferenceTree.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="OSCB.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

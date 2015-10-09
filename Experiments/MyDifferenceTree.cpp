@@ -4,11 +4,11 @@
 #include "MySpaceFillingNaive.h"
 #include "MyPrimitiveDrawer.h"
 
-MyContourTree* MyDifferenceTree::mTemplateTree = 0;
 MyDifferenceTree::MyDifferenceTree()
 {
 	mCt0 = mCt0 = 0;
 	mLabelDrawRatio = 1;
+	mLesserHistogramAlpha = 0.3;
 }
 
 
@@ -104,16 +104,48 @@ void MyDifferenceTree::UpdateDifferenceHistogram(){
 		// tmp
 
 		MakeDiffHistogram(mCt0, mCt1, combinedNodeIdx, mArcDiffHistogram[thisArc]);
-		mMinDiff = min(mMinDiff, mArcDiffHistogram[thisArc].mMin);
-		mMaxDiff = max(mMaxDiff, mArcDiffHistogram[thisArc].mMax);
-		mMaxHistogramCount = max(mMaxHistogramCount, *max_element(mArcDiffHistogram[thisArc].mKernelDensity.begin(),
-			mArcDiffHistogram[thisArc].mKernelDensity.end()));
+		if (mArcDiffHistogram[thisArc].mKernelDensity.size()>0){
+			mMinDiff = min(mMinDiff, mArcDiffHistogram[thisArc].mMin);
+			mMaxDiff = max(mMaxDiff, mArcDiffHistogram[thisArc].mMax);
+			mMaxHistogramCount = max(mMaxHistogramCount, *max_element(mArcDiffHistogram[thisArc].mKernelDensity.begin(),
+				mArcDiffHistogram[thisArc].mKernelDensity.end()));
+		}
 	}
 }
 
+void MyDifferenceTree::UpdateDifferenceHistogramPixel(){
+	mArcDiffHistogramPixel.clear();
+	mMinDiff = 10;
+	mMaxDiff = -10;
+	for (map<long, long>::const_iterator itr = mArcMap.begin();
+		itr != mArcMap.end(); itr++){
+		long thisArc = itr->first;
+
+		vector<long> thisArcNodeIdx;
+		mCt0->GetArcVoxesIndices(thisArc, thisArcNodeIdx);
+
+		vector<long> combinedNodeIdx = thisArcNodeIdx;
+
+		MakeDiffHistogramPixel(mCt0, mCt1, combinedNodeIdx, thisArc);
+		MyDiffHistogramPixel& histogram = mArcDiffHistogramPixel[thisArc];
+
+		if (!histogram.mPixelDiffValues.empty()){
+			mMinDiff = min(mMinDiff, *min_element(histogram.mPixelDiffValues.begin(),
+				histogram.mPixelDiffValues.end()));
+			mMaxDiff = max(mMaxDiff, *max_element(histogram.mPixelDiffValues.begin(),
+				histogram.mPixelDiffValues.end()));
+		}
+	}
+
+}
+
 void MyDifferenceTree::MakeDiffHistogram(MyContourTree* ct0, MyContourTree* ct1, 
-	const vector<long> voxes, SimpleDistribution& distr){
-	float binWidth = 0.01;
+	const vector<long>& voxes, SimpleDistribution& distr){
+	if (voxes.size() == 0) {
+		distr.mMax = distr.mMin = 0;
+		return;
+	}
+	float binWidth = 0.005;
 	float sigma = 0.05;
 	float* vox0 = &(ct0->height(0, 0, 0));
 	float* vox1 = &(ct1->height(0, 0, 0));
@@ -154,6 +186,31 @@ void MyDifferenceTree::MakeDiffHistogram(MyContourTree* ct0, MyContourTree* ct1,
 	}
 }
 
+float MyDifferenceTree::CountHistogramPixels(MyContourTree* ct0, long arc){
+	float count = 0;
+	vector<float>& histogram = ct0->mArcHistogram[arc];
+	for (int i = 0; i < histogram.size(); i++){
+		float height;
+		if (ct0->mDefaultScale == MyContourTree::MappingScale_Sci){
+			float mantissaHeight;
+			ct0->GetDrawingHeightScientific(histogram[i], height, mantissaHeight);
+		}
+		else{
+			height = ct0->GetDrawingHeight(histogram[i], ct0->mDefaultScale);
+		}
+		count += height;
+	}
+	return count;
+}
+
+void MyDifferenceTree::MakeDiffHistogramPixel(MyContourTree* ct0, MyContourTree* ct1,
+	const vector<long>& voxes, long arc){
+	float minValue = *(ct0->supernodes[ct0->superarcs[arc].bottomID].value);
+	float maxValue = *(ct0->supernodes[ct0->superarcs[arc].topID].value);
+	MyDiffHistogramPixel &histogram = mArcDiffHistogramPixel[arc];
+	histogram.Build(&(ct0->height(0, 0, 0)), &(ct1->height(0, 0, 0)), voxes, 0.005, minValue, maxValue);
+}
+
 void MyDifferenceTree::UpdatePathArcs(){
 	mPathArcs.clear();
 	long lowestNode = mCt0->validNodes[0];
@@ -174,7 +231,77 @@ void MyDifferenceTree::UpdatePathArcs(){
 	}
 }
 
-MyBox2f MyDifferenceTree::GetArcBox(long arc) const{
+
+MyVec2f MyDifferenceTree::GetArcRawBasePos(long arc) const{
+	float rawPosX, rawPosY;
+	long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
+	if (mCt0->supernodesExt[topNode].numLeaves <= mCt0->supernodesExt[bottomNode].numLeaves){
+		rawPosX = mCt0->supernodes[topNode].xPosn;
+	}
+	else{
+		rawPosX = mCt0->supernodes[bottomNode].xPosn;
+	}
+	rawPosY = mCt0->supernodes[bottomNode].yPosn;
+	return MyVec2f(rawPosX, rawPosY);
+}
+
+MyVec2f MyDifferenceTree::GetArcBasePos(long arc) const{
+	map<long, MyBox2f>::const_iterator itr = mArcPosBox.find(arc);
+	if (itr == mArcPosBox.end()){
+		return GetArcRawBasePos(arc);
+	}
+	else{
+		float xPos, yPos;
+		switch (mCt0->mHistogramSide){
+		case MyContourTree::HistogramSide_Sym:
+			xPos = (itr->second.GetLowPos()[0] + itr->second.GetHighPos()[0]) / 2;
+			break;
+		case MyContourTree::HistogramSide_Left:
+			xPos = itr->second.GetHighPos()[0];
+			break;
+		case MyContourTree::HistogramSide_Right:
+			xPos = itr->second.GetLowPos()[0];
+			break;
+		}
+		yPos = itr->second.GetLowPos()[1];
+		return MyVec2f(xPos, yPos);
+	}
+}
+
+MyBox2f MyDifferenceTree::GetArcRawBoxPixel(long arc) const{
+	float width = mCt0->GetArcWidth(arc, mCt0->mDefaultScale);
+	long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
+	float yBottom = *mCt0->supernodes[bottomNode].value;
+	float yTop = *mCt0->supernodes[topNode].value;
+	float xPos;
+	if (mCt0->supernodesExt[topNode].numLeaves <= mCt0->supernodesExt[bottomNode].numLeaves){
+		xPos = mCt0->supernodes[topNode].xPosn;
+	}
+	else{
+		xPos = mCt0->supernodes[bottomNode].xPosn;
+	}
+	float leftHeightScale;
+	float rightHeightScale;
+	switch (mCt0->mHistogramSide){
+	case MyContourTree::HistogramSide_Sym:
+		leftHeightScale = 0.5;
+		rightHeightScale = 0.5;
+		break;
+	case MyContourTree::HistogramSide_Left:
+		leftHeightScale = 1;
+		rightHeightScale = 0;
+		break;
+	case MyContourTree::HistogramSide_Right:
+		leftHeightScale = 0;
+		rightHeightScale = 1;
+		break;
+	}
+
+	return MyBox2f(MyVec2f(xPos - width*leftHeightScale, yBottom),
+		MyVec2f(xPos + width*rightHeightScale, yTop));
+}
+
+MyBox2f MyDifferenceTree::GetArcRawBox(long arc) const{
 	map<long, SimpleDistribution>::const_iterator itr = mArcDiffHistogram.find(arc);
 	if (itr == mArcDiffHistogram.end()) return MyBox2f(MyVec2f(0, 0), MyVec2f(0, 0));
 	long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
@@ -218,21 +345,11 @@ MyBox2f MyDifferenceTree::GetArcBox(long arc) const{
 	else{
 		width = mCt0->GetDrawingHeight(*max_element(histogram.begin(), histogram.end()), mCt0->mDefaultScale);
 	}
-	return MyBox2f(MyVec2f(xPos, yPos), MyVec2f(xPos+width, yEnd));
+	return MyBox2f(MyVec2f(xPos - leftHeightScale*width, yPos), MyVec2f(xPos + rightHeightScale*width, yEnd));
 }
 
 void MyDifferenceTree::DiffValueToColor(float diff, float color_rgba[4]){
-	if (diff <= 0){
-		color_rgba[0] = 1;
-		color_rgba[1] = 1 - diff / mMinDiff;
-		color_rgba[2] = 1 - diff / mMinDiff;
-	}
-	else{
-		color_rgba[2] = 1;
-		color_rgba[1] = 1 - diff / mMaxDiff;
-		color_rgba[0] = 1 - diff / mMaxDiff;
-	}
-	color_rgba[3] = 1;
+	ColorScaleTable::DiffValueToColor(diff, mMinDiff, mMaxDiff, color_rgba);
 }
 
 bool MyDifferenceTree::IsArcMapped(long arc) const{
@@ -351,12 +468,15 @@ void MyDifferenceTree::DrawDiffHistogram(float xPos, float yPos, SimpleDistribut
 			float leftHeight = baseHeight * leftHeightScale*arcZoom;
 			float rightHeight = baseHeight * rightHeightScale*arcZoom;
 			glBegin(GL_QUADS);
-			int color = mCt0->GetDrawingHeight(histogram[i], scale)
-				/ mCt0->GetDrawingHeight(mMaxHistogramCount, scale) * 7 + 0.5;
+			//int color = mCt0->GetDrawingHeight(histogram[i], scale)
+			//	/ mCt0->GetDrawingHeight(mMaxHistogramCount, scale) * 7 + 0.5;
 			//float color = 0.5;
-			glColor4f(colorBrewer_sequential_8_multihue_9[color][0] / 255.f,
-				colorBrewer_sequential_8_multihue_9[color][1] / 255.f,
-				colorBrewer_sequential_8_multihue_9[color][2] / 255.f, alplaModulation);
+			//glColor4f(colorBrewer_sequential_8_multihue_9[color][0] / 255.f,
+			//	colorBrewer_sequential_8_multihue_9[color][1] / 255.f,
+			//	colorBrewer_sequential_8_multihue_9[color][2] / 255.f, alplaModulation);
+			float color[4];
+			DiffValueToColor(distr.mMin + i*yStep, color);
+			glColor4f(color[0], color[1], color[2], alplaModulation);
 			glVertex2f(xPos - leftHeight, yStart + i*yStep);
 			glVertex2f(xPos + rightHeight, yStart + i*yStep);
 			glVertex2f(xPos + rightHeight, yStart + (i + 1)*yStep);
@@ -392,21 +512,215 @@ void MyDifferenceTree::DrawDiffHistogram(float xPos, float yPos, SimpleDistribut
 	glDepthFunc(GL_LESS);
 }
 
-void MyDifferenceTree::DrawDiffHistogram(long arc){
-	long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
-	float xPos;
-	if (mCt0->supernodesExt[topNode].numLeaves <= mCt0->supernodesExt[bottomNode].numLeaves){
-		xPos = mCt0->supernodes[topNode].xPosn;
+
+void MyDifferenceTree::DrawDiffHistogramPixel(float xPos, float yPos, float height, const std::vector<float>& tempDistr,
+	const MyDiffHistogramPixel& diffDistr, MyContourTree::MappingScale scale, MyContourTree::HistogramSide side, float alpha){
+	const vector<float>& histogram = tempDistr;
+	if (histogram.empty()) return;
+
+	float yStart = yPos;
+	float yEnd = yPos+height;
+	float yStep = height / histogram.size();
+
+	float arcZoom = 1;
+	glLineWidth(1);
+
+	float leftHeightScale;
+	float rightHeightScale;
+	switch (side){
+	case MyContourTree::HistogramSide_Sym:
+		leftHeightScale = 0.5;
+		rightHeightScale = 0.5;
+		break;
+	case MyContourTree::HistogramSide_Left:
+		leftHeightScale = 1;
+		rightHeightScale = 0;
+		break;
+	case MyContourTree::HistogramSide_Right:
+		leftHeightScale = 0;
+		rightHeightScale = 1;
+		break;
+	}
+	float alplaModulation = alpha;
+	glDepthFunc(GL_ALWAYS);
+	if (scale == MyContourTree::MappingScale_Sci){
+		vector<float> exponentHeights(histogram.size());
+		vector<float> mantissaHeights(histogram.size());
+		vector<int> exponentPos(histogram.size());
+		float exponentRange = mCt0->mMaxExponent - mCt0->mMinExponent;
+		for (int i = 0; i < histogram.size(); i++){
+			float exponentHeight;
+			float mantissaHeight;
+			mCt0->GetDrawingHeightScientific(histogram[i], exponentHeight, mantissaHeight);
+			exponentHeights[i] = exponentHeight*arcZoom;
+			mantissaHeights[i] = mantissaHeight*arcZoom;
+			if (exponentRange != 0){
+				int exponent;
+				float mantissa;
+				mCt0->floatToScientific(histogram[i], exponent, mantissa);
+				exponentPos[i] = (exponent - mCt0->mMinExponent) / exponentRange * 7 + 0.5;
+			}
+			else{
+				exponentPos[i] = 0;
+			}
+		}
+		for (int i = 0; i < diffDistr.GetNumSegs(); i++){
+			float expHeight = exponentHeights[i];
+			//float expHeightNext = (i == histogram.size() - 1 ? exponentHeights[i] : exponentHeights[i + 1]);
+			float expHeightNext = expHeight;
+			float posY = yStart + i*yStep;
+
+			//glColor4f(colorBrewer_sequential_8_multihue_9[exponentPos[i]][0] / 255.f,
+			//	colorBrewer_sequential_8_multihue_9[exponentPos[i]][1] / 255.f,
+			//	colorBrewer_sequential_8_multihue_9[exponentPos[i]][2] / 255.f, alplaModulation);
+
+			if (diffDistr.GetNumPixels(i) > 0){
+				glBegin(GL_QUADS);
+				float expHeightStep = expHeight / diffDistr.GetNumPixels(i);
+				for (int j = 0; j < diffDistr.GetNumPixels(i); j++){
+					float color[4];
+					int pixelIdx = diffDistr.mSegStartIndices[i] + j;
+					if (pixelIdx>diffDistr.mPixelDiffValues.size() - 1){
+						cout << "PixelIdx out of range.\n";
+					}
+					DiffValueToColor(diffDistr.mPixelDiffValues[pixelIdx], color);
+					glColor4f(color[0], color[1], color[2], alplaModulation);
+					glVertex2f(xPos - expHeight*leftHeightScale + expHeightStep*j, yStart + i*yStep);
+					glVertex2f(xPos - expHeight*leftHeightScale + expHeightStep*(j+1), yStart + i*yStep);
+					glVertex2f(xPos - expHeight*leftHeightScale + expHeightStep*(j + 1), yStart + (i + 1)*yStep);
+					glVertex2f(xPos - expHeight*leftHeightScale + expHeightStep*j, yStart + (i + 1)*yStep);
+					pixelIdx++;
+				}
+				glEnd();
+			}
+
+
+			glBegin(GL_LINES);
+			// exponent part
+			glColor4f(0, 0, 0, alplaModulation);
+			glVertex2f(xPos + expHeight*rightHeightScale, yStart + i*yStep);
+			glVertex2f(xPos + expHeightNext*rightHeightScale, yStart + (i + 1)*yStep);
+			glVertex2f(xPos - expHeight*leftHeightScale, yStart + i*yStep);
+			glVertex2f(xPos - expHeightNext*leftHeightScale, yStart + (i + 1)*yStep);
+			if (i == 0){
+				glVertex2f(xPos + expHeight*rightHeightScale, yStart);
+				glVertex2f(xPos - expHeightNext*leftHeightScale, yStart);
+			}
+			if (i == diffDistr.GetNumSegs() - 1){
+				glVertex2f(xPos + expHeight*rightHeightScale, yEnd);
+				glVertex2f(xPos - expHeightNext*leftHeightScale, yEnd);
+			}
+
+			// mantissa part
+			float mantissaHeight = mantissaHeights[i];
+			float mantHeightNext = (i == histogram.size() - 1 ? mantissaHeights[i] : mantissaHeights[i + 1]);
+			//float mantHeightNext = mantissaHeight;
+			glColor4f(0, 0, 1, alplaModulation);
+			glVertex2f(xPos + mantissaHeight*rightHeightScale, yStart + i*yStep);
+			glVertex2f(xPos + mantHeightNext*rightHeightScale, yStart + (i + 1)*yStep);
+			glVertex2f(xPos - mantissaHeight*leftHeightScale, yStart + i*yStep);
+			glVertex2f(xPos - mantHeightNext*leftHeightScale, yStart + (i + 1)*yStep);
+
+			if (i == 0){
+				glVertex2f(xPos + mantissaHeight*rightHeightScale, yStart);
+				glVertex2f(xPos - mantissaHeight*leftHeightScale, yStart);
+			}
+			if (i == histogram.size() - 1){
+				glVertex2f(xPos + mantissaHeight*rightHeightScale, yEnd);
+				glVertex2f(xPos - mantissaHeight*leftHeightScale, yEnd);
+			}
+			glEnd();
+		}
 	}
 	else{
-		xPos = mCt0->supernodes[bottomNode].xPosn;
+		for (int i = 0; i < diffDistr.GetNumSegs(); i++){
+			float baseHeight = mCt0->GetDrawingHeight(histogram[i], scale);
+			float leftHeight = baseHeight * leftHeightScale*arcZoom;
+			float rightHeight = baseHeight * rightHeightScale*arcZoom;
+			glBegin(GL_QUADS);
+			//int color = mCt0->GetDrawingHeight(histogram[i], scale)
+			//	/ mCt0->GetDrawingHeight(mMaxHistogramCount, scale) * 7 + 0.5;
+			//float color = 0.5;
+			//glColor4f(colorBrewer_sequential_8_multihue_9[color][0] / 255.f,
+			//	colorBrewer_sequential_8_multihue_9[color][1] / 255.f,
+			//	colorBrewer_sequential_8_multihue_9[color][2] / 255.f, alplaModulation);
+
+			if (diffDistr.GetNumPixels(i) > 0){
+				glBegin(GL_QUADS);
+				float expHeightStep = baseHeight*arcZoom / diffDistr.GetNumPixels(i);
+				for (int j = 0; j < diffDistr.GetNumPixels(i); j++){
+					int pixelIdx = diffDistr.mSegStartIndices[i] + j;
+					float color[4];
+					DiffValueToColor(diffDistr.mPixelDiffValues[pixelIdx], color);
+					glColor4f(color[0], color[1], color[2], alplaModulation);
+					glVertex2f(xPos - leftHeight + expHeightStep*j, yStart + i*yStep);
+					glVertex2f(xPos - leftHeight + expHeightStep*(j+1), yStart + i*yStep);
+					glVertex2f(xPos - leftHeight + expHeightStep*(j+1), yStart + (i + 1)*yStep);
+					glVertex2f(xPos - leftHeight + expHeightStep*j, yStart + (i + 1)*yStep);
+					pixelIdx++;
+				}
+				glEnd();
+			}
+
+			glColor4f(0, 0, 0, alplaModulation);
+			glBegin(GL_LINES);
+			if (i == 0){
+				glVertex2f(xPos - leftHeight, yStart);
+				glVertex2f(xPos + rightHeight, yStart);
+			}
+			if (i == histogram.size() - 1){
+				glVertex2f(xPos - leftHeight, yEnd);
+				glVertex2f(xPos + rightHeight, yEnd);
+			}
+			else{
+				float baseHeightNext = mCt0->GetDrawingHeight(histogram[i + 1], scale);
+				//float baseHeightNext = baseHeight;
+				float leftHeightNext = baseHeightNext * leftHeightScale*arcZoom;
+				float rightHeightNext = baseHeightNext * rightHeightScale*arcZoom;
+				glVertex2f(xPos - leftHeight, yStart + (i + 1)*yStep);
+				glVertex2f(xPos - leftHeightNext, yStart + (i + 1)*yStep);
+				glVertex2f(xPos + rightHeight, yStart + (i + 1)*yStep);
+				glVertex2f(xPos + rightHeightNext, yStart + (i + 1)*yStep);
+			}
+			glVertex2f(xPos - leftHeight, yStart + i*yStep);
+			glVertex2f(xPos - leftHeight, yStart + (i + 1)*yStep);
+			glVertex2f(xPos + rightHeight, yStart + i*yStep);
+			glVertex2f(xPos + rightHeight, yStart + (i + 1)*yStep);
+			glEnd();
+		}
 	}
-	float yPos = mCt0->supernodes[bottomNode].yPosn;
-	float alpha = 0.3;
+	glDepthFunc(GL_LESS);
+}
+
+void MyDifferenceTree::DrawDiffHistogramPixel(long arc){
+	std::map<long, MyDiffHistogramPixel>::const_iterator itr;
+	itr = mArcDiffHistogramPixel.find(arc);
+	if (itr == mArcDiffHistogramPixel.end()) return;
+	const MyDiffHistogramPixel& diffDistr = itr->second;
+	std::vector<float>& valueDistr = mCt0->mArcHistogram[arc];
+	MyVec2f rawPos = this->GetArcRawBasePos(arc);
+	MyContourTree::MappingScale scale = mCt0->mDefaultScale;
+	MyContourTree::HistogramSide side = mCt0->mHistogramSide;
+	float height = *mCt0->supernodes[mCt0->superarcs[arc].topID].value
+		- *mCt0->supernodes[mCt0->superarcs[arc].bottomID].value;
+	float alpha = mLesserHistogramAlpha;
 	if (find(mCt0->mSigArcs.begin(), mCt0->mSigArcs.end(), arc) != mCt0->mSigArcs.end()){
 		alpha = 1;
 	}
-	DrawDiffHistogram(xPos, yPos, mArcDiffHistogram[arc], mCt0->mDefaultScale, mCt0->mHistogramSide, alpha);
+	DrawDiffHistogramPixel(rawPos[0], rawPos[1], height, valueDistr, diffDistr, scale, side, alpha);
+
+}
+
+void MyDifferenceTree::DrawDiffHistogram(long arc){
+	long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
+	MyVec2f basePos = this->GetArcBasePos(arc);
+	MyVec2f rawPos = this->GetArcRawBasePos(arc);
+	float alpha = 0.2;
+	if (find(mCt0->mSigArcs.begin(), mCt0->mSigArcs.end(), arc) != mCt0->mSigArcs.end()){
+		alpha = 1;
+	}
+	DrawDiffHistogram(basePos[0], basePos[1], mArcDiffHistogram[arc], mCt0->mDefaultScale, mCt0->mHistogramSide, alpha);
+	MyPrimitiveDrawer::DrawLineAt(basePos, rawPos);
 }
 
 void MyDifferenceTree::Show(){
@@ -414,7 +728,8 @@ void MyDifferenceTree::Show(){
 	for (long i = 0; i < mCt0->nValidArcs; i++){
 		long arc = mCt0->valid[i];
 		if (this->IsArcMapped(arc)){
-			this->DrawDiffHistogram(arc);
+			//this->DrawDiffHistogram(arc);
+			this->DrawDiffHistogramPixel(arc);
 		}
 		//else if(mCt0->mPathArcs[arc]){
 		else{
@@ -458,20 +773,13 @@ void MyDifferenceTree::Show(){
 
 	// label
 	float cutSize = 0.005;
-	//MySpaceFillingNaive spaceFill;
-	MySpaceFillingSpiral spaceFill;
-	for (int i = 0; i<mArcLabelSorted.size()*mLabelDrawRatio; i++){
-		long arc = mArcLabelSorted[i];
-		MyBox2f box = this->GetArcBox(arc);
-		spaceFill.ForceAddBox(box);
-	}
 	// draw the leader lines
 	for (int i = 0; i<mArcLabelSorted.size()*mLabelDrawRatio; i++){
 		long arc = mArcLabelSorted[i];
-		long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
 		MyBox2f box = mLabelPos[arc];
-		MyPrimitiveDrawer::DrawLineAt(MyVec2f(mCt0->supernodes[topNode].xPosn, mCt0->supernodes[bottomNode].yPosn), box.GetLowPos());
+		MyPrimitiveDrawer::DrawLineAt(this->GetArcBasePos(arc), box.GetLowPos());
 	}
+	glDepthFunc(GL_ALWAYS);
 	void * font = GLUT_BITMAP_HELVETICA_18;
 	//void * font = GLUT_BITMAP_TIMES_ROMAN_24;
 	for (int i = 0; i<mArcLabelSorted.size()*mLabelDrawRatio; i++){
@@ -480,28 +788,30 @@ void MyDifferenceTree::Show(){
 		long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
 		MyBox2f box = mLabelPos[arc];
 		string name = mCt0->mArcName[arc];
-		glColor4f(1, 1, 1, 1);
-		glBegin(GL_QUADS);
-		glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
-		glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
-		glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
-		glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
-		glEnd();
-		glColor4f(0, 0, 0, 1);
-		glBegin(GL_LINE_LOOP);
-		glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
-		glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
-		glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
-		glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
-		//glVertex2f(box.GetLowPos()[0]-0.0025, box.GetLowPos()[1]-0.01);
-		//glVertex2f(box.GetHighPos()[0] + 0.0025, box.GetLowPos()[1] - 0.01);
-		//glVertex2f(box.GetHighPos()[0] + 0.0025, box.GetHighPos()[1]+0.01);
-		//glVertex2f(box.GetLowPos()[0] - 0.0025, box.GetHighPos()[1] + 0.01);
-		glEnd();
+		// draw the box
+		if (mCt0->mLabelStyle & MyContourTree::LabelStyle_SOLID){
+			glColor4f(1, 1, 1, 1);
+			glBegin(GL_QUADS);
+			glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+			glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+			glEnd();
+		}
+		if (mCt0->mLabelStyle & MyContourTree::LabelStyle_BOARDER){
+			glColor4f(0, 0, 0, 1);
+			glBegin(GL_LINE_LOOP);
+			glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+			glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+			glEnd();
+		}
 		glRasterPos2f(box.GetLowPos()[0], box.GetLowPos()[1] + 0.01);
 		glutBitmapString(font, (const unsigned char*)name.c_str());
 	}
 
+	glDepthFunc(GL_LESS);
 	int viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
 	float pixelWidth = 1.1f / viewport[2];
@@ -514,6 +824,61 @@ void MyDifferenceTree::Show(){
 	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)diffName.c_str());
 	glRasterPos2f(0.01 - pixelWidth / 2, 1.02 - pixelHeight / 2);
 	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)diffName.c_str());
+}
+
+
+int MyDifferenceTree::PickArc(float x, float y, bool printInfo){
+	return mCt0->PickArc(x, y, printInfo);
+}
+
+int MyDifferenceTree::PickArcFromLabel(float x, float y){
+	for (int i = 0; i < mArcLabelSorted.size()*mLabelDrawRatio; i++){
+		long arc = mArcLabelSorted[i];
+		MyBox2f box = mLabelPos[arc];
+		if (box.IsIntersected(MyVec2f(x, y))){
+			return arc;
+		}
+	}
+	return -1;
+}
+
+void MyDifferenceTree::DrawArcLabelHighlight(long arc){
+	if (mLabelPos.find(arc) == mLabelPos.end()) return;
+	void * font = GLUT_BITMAP_HELVETICA_18;
+	long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
+	MyBox2f box = mLabelPos[arc];
+	string name = mCt0->mArcName[arc];
+	glLineWidth(3);
+	glColor4f(0, 0, 0, 1);
+	MyPrimitiveDrawer::DrawLineAt(this->GetArcBasePos(arc), box.GetLowPos());
+	if (mCt0->mLabelStyle & MyContourTree::LabelStyle_SOLID){
+		glColor4f(0, 0, 0, 1);
+		glBegin(GL_QUADS);
+		glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+		glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+		glEnd();
+	}
+
+	if (mCt0->mLabelStyle & MyContourTree::LabelStyle_BOARDER){
+		glColor4f(1, 1, 1, 1);
+		glBegin(GL_LINE_LOOP);
+		glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+		glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+		glEnd();
+	}
+	if (mCt0->mLabelStyle & MyContourTree::LabelStyle_SOLID){
+		glColor4f(1, 1, 1, 1);
+	}
+	else{
+		glColor4f(0, 0, 0, 1);
+	}
+	glRasterPos2f(box.GetLowPos()[0], box.GetLowPos()[1] + 0.01);
+	glutBitmapString(font, (const unsigned char*)name.c_str());
+	glLineWidth(1);
 }
 
 void MyDifferenceTree::ShowLegend(){
@@ -555,12 +920,16 @@ void MyDifferenceTree::UpdateLabels(int width, int height){
 		}
 	}
 
-	mTemplateTree = mCt0;
-	sort(mArcLabelSorted.begin(), mArcLabelSorted.end(), compareArcMore);
+	MyContourTree::TemplateTree = mCt0;
+	sort(mArcLabelSorted.begin(), mArcLabelSorted.end(), MyContourTree::compareArcMore);
 
 	for (map<long, long>::iterator itr = mArcMap.begin(); itr != mArcMap.end(); itr++){
 		long arc = itr->first;
-		MyBox2f box = this->GetArcBox(arc);
+		MyBox2f box;
+		map<long, MyBox2f>::const_iterator arcitr = mArcPosBox.find(arc);
+		if (arcitr != mArcPosBox.end()) box = mArcPosBox[arc];
+		//else box = this->GetArcRawBox(arc);
+		else box = this->GetArcRawBoxPixel(arc);
 		spaceFill.ForceAddBox(box);
 	}
 
@@ -569,7 +938,7 @@ void MyDifferenceTree::UpdateLabels(int width, int height){
 	float pixelWidth = 1.1f / width;
 	float pixelHeight = 1.1f / height * 2; // why times 2?
 	void * font = GLUT_BITMAP_HELVETICA_18;
-	for (int i = 0; i<mArcLabelSorted.size()*mLabelDrawRatio; i++){
+	for (int i = 0; i<mArcLabelSorted.size(); i++){
 		long arc = mArcLabelSorted[i];
 
 		long topNode = mCt0->superarcs[arc].topID, bottomNode = mCt0->superarcs[arc].bottomID;
@@ -582,8 +951,11 @@ void MyDifferenceTree::UpdateLabels(int width, int height){
 			for (int i = 0; i < name.size(); i++){
 				length += glutBitmapWidth(font, name[i]);
 			}
-			MyVec2f lowPos(mCt0->supernodes[topNode].xPosn - length / 2 * pixelWidth,
-				mCt0->supernodes[bottomNode].yPosn + cutSize + mArcDiffHistogram[arc].mMax - mArcDiffHistogram[arc].mMin);
+			//MyVec2f lowPos(mCt0->supernodes[topNode].xPosn - length / 2 * pixelWidth,
+			//	mCt0->supernodes[bottomNode].yPosn + cutSize + mArcDiffHistogram[arc].mMax - mArcDiffHistogram[arc].mMin);
+
+			MyVec2f lowPos = this->GetArcBasePos(arc) + MyVec2f(-length / 2 * pixelWidth,
+				cutSize + mArcDiffHistogram[arc].mMax - mArcDiffHistogram[arc].mMin);
 			MyVec2f highPos = lowPos + MyVec2f(length * pixelWidth, glutBitmapHeight(font)*pixelHeight/2);
 			//MyBox2f box = spaceFill.PushBoxFromTop(MyBox2f(lowPos, highPos), 0.0001);
 			MyBox2f box = spaceFill.PushBox(MyBox2f(lowPos, highPos), MyVec2f(0.005, 0));
@@ -592,6 +964,26 @@ void MyDifferenceTree::UpdateLabels(int width, int height){
 	}
 }
 
-bool MyDifferenceTree::compareArcMore(long arc0, long arc1){
-	return mTemplateTree->mArcNodes[arc0].size() > mTemplateTree->mArcNodes[arc1].size();
+
+void MyDifferenceTree::UpdateLayout(){
+	mArcPosBox.clear();
+	if (!mUseOutsidePlacement) return;
+	vector<long> arcSorted;
+	for (map<long, long>::iterator itr = mArcMap.begin(); itr != mArcMap.end(); itr++){
+		long arc = itr->first;
+		arcSorted.push_back(arc);
+	}
+
+	MyContourTree::TemplateTree = mCt0;
+	sort(arcSorted.begin(), arcSorted.end(), MyContourTree::compareArcMore);
+
+	MySpaceFillingSpiral arcSpiralFilling;
+
+	for (int i = 0; i < arcSorted.size(); i++){
+		long arc = arcSorted[i];
+		//MyBox2f arcBox = this->GetArcRawBox(arc);
+		MyBox2f arcBox = this->GetArcRawBoxPixel(arc);
+		MyBox2f posBox = arcSpiralFilling.PushBox(arcBox);
+		mArcPosBox[arc] = posBox;
+	}
 }

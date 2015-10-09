@@ -56,7 +56,7 @@ MyBox2f MySpaceFillingSpiral::PushBox(const MyBox2f& box, const MyVec2f& boarder
 		MyBox2f currentBox;
 		do{
 			currentBox = theBox + spiralWalker.Next();
-		} while (!IsBoxEmpty(currentBox));
+		} while (!IsBoxEmpty(currentBox) || currentBox.GetLowPos()[0]<0);
 		mBoxes.push_back(box + spiralWalker.Last());
 		return box + spiralWalker.Last();
 	}

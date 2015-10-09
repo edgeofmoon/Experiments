@@ -12,6 +12,7 @@
 #include "Shader.h"
 #include "MyGraphicsTool.h"
 
+#include <algorithm>
 #include <string>
 #include <cstdio>
 #include <cstdlib>
@@ -47,10 +48,16 @@ int MyTracks::Read(const std::string& filename){
 	}
 	else printf("Info: %d tracts from file %s\n", mHeader.n_count, filename.c_str());
 
+	cout << "Allocating Storage...\r";
+	mTracks.clear();
 	mTracks.resize(mHeader.n_count);
 
 
 	for(int i = 0;i<mHeader.n_count; i++){
+		if ((int)((i + 1) * 100 / (float)mHeader.n_count)
+			- (int)(i * 100 / (float)mHeader.n_count) >= 1){
+			cout << "Loading: " << i*100.f / mHeader.n_count << "%.\r";
+		}
 		MySingleTrackData& track = mTracks[i];
 		fread(&track.mSize, sizeof(int), 1, fp);
 		track.mPoints.resize(track.mSize);
@@ -67,6 +74,7 @@ int MyTracks::Read(const std::string& filename){
 			fread(&track.mTrackProperties[0], mHeader.n_properties*sizeof(float), 1, fp);
 		}
 	}
+	cout << "Tracks loading completed.\n";
 	fclose(fp);
 	return 1;
 }
@@ -148,6 +156,9 @@ void MyTracks::ComputeTubeGeometry(){
 		totalPoints += mTracks[it].mSize;
 	}
 	totalPoints *= (mFaces + 1);
+
+	cout << "Allocating Storage for Geometry...\r";
+
 	mVertices.resize(totalPoints);
 	mNormals.resize(totalPoints);
 	mTexCoords.resize(totalPoints);
@@ -155,10 +166,14 @@ void MyTracks::ComputeTubeGeometry(){
 	mColors.resize(totalPoints);
 
 	for (int it = 0; it < mTracks.size(); it++){
+		if ((int)((it + 1) * 100 / (float)mTracks.size())
+			- (int)(it * 100 / (float)mTracks.size()) >= 1){
+			cout << "Computing: " << it*100.f / mTracks.size() << "%.          \r";
+		}
 		int npoints = mTracks[it].mSize;
 
-		const float PI = 3.1415926f;
-		float dangle = 2 * PI / mFaces;
+		const float myPI = 3.1415926f;
+		float dangle = 2 * myPI / mFaces;
 		MyVec3f pole(0.6, 0.8, 0);
 
 		MyArray3f candicates;
@@ -251,6 +266,7 @@ void MyTracks::ComputeTubeGeometry(){
 			}
 		}
 	}
+	cout << "Computing completed.\n";
 }
 
 void MyTracks::ComputeLineGeometry(){
@@ -261,17 +277,27 @@ void MyTracks::ComputeLineGeometry(){
 	for (int it = 0; it < mTracks.size(); it++){
 		totalPoints += mTracks[it].mSize;
 	}
-	mVertices.resize(totalPoints);
-	mNormals.resize(totalPoints);
-	//mTexCoords.resize(totalPoints);
-	//mRadius.resize(totalPoints);
-	//mColors.resize(totalPoints);
 
+	cout << "Allocating Storage for Geometry...\r";
+
+	mVertices.clear();
+	mNormals.clear();
+	mVertices.reserve(totalPoints);
+	mNormals.reserve(totalPoints);
+	//mVertices.resize(totalPoints);
+	//mNormals.resize(totalPoints);
+
+	mIdxOffset.clear();
+	mIdxOffset.reserve(mTracks.size());
 	for (int it = 0; it < mTracks.size(); it++){
+		if ((int)((it + 1) * 100 / (float)mTracks.size())
+			- (int)(it * 100 / (float)mTracks.size()) >= 1){
+			cout << "Computing: " << it*100.f / mTracks.size() << "%.          \r";
+		}
 		int npoints = mTracks[it].mSize;
 
-		const float PI = 3.1415926f;
-		float dangle = 2 * PI / mFaces;
+		const float myPI = 3.1415926f;
+		float dangle = 2 * myPI / mFaces;
 		MyVec3f pole(0.6, 0.8, 0);
 
 		MyArray3f candicates;
@@ -312,12 +338,10 @@ void MyTracks::ComputeLineGeometry(){
 			MyVec3f perpend1 = (pole^d).normalized();
 			MyVec3f perpend2 = (perpend1^d).normalized();
 
-			mVertices[currentIdx + i] = p;
-			mNormals[currentIdx + i] = perpend1;
-			//mTexCoords[currentIdx + i] = MyVec2f(i, 1);
-			//mRadius[currentIdx + i] = 0.4;
-			//mColors[currentIdx + i] = mTracts->GetColor(it, i);
-			//mColors[currentIdx + i] = MyColor4f(0.5, 0.5, 0.5, 1);
+			//mVertices[currentIdx + i] = p;
+			//mNormals[currentIdx + i] = perpend1;
+			mVertices.push_back(p);
+			mNormals.push_back(perpend1);
 		}
 
 		mIdxOffset << currentIdx;
@@ -325,6 +349,7 @@ void MyTracks::ComputeLineGeometry(){
 	}
 
 	mLineIndices.clear();
+	mLineIndices.reserve(totalPoints);
 	// index
 	for (int it = 0; it<this->GetNumTracks(); it++){
 		int offset = mIdxOffset[it];
@@ -332,6 +357,7 @@ void MyTracks::ComputeLineGeometry(){
 			mLineIndices << i + offset;
 		}
 	}
+	cout << "Computing completed.\n";
 }
 
 void MyTracks::ComputeGeometry(){
@@ -437,7 +463,7 @@ void MyTracks::LoadShader(){
 	}
 
 	glDeleteProgram(mShaderProgram);
-	mShaderProgram = InitShader("contour.vert", "contour.frag", "fragColour", "name");
+	mShaderProgram = InitShader("tracks.vert", "tracks.frag", "fragColour", "name");
 
 	mNormalAttribute = glGetAttribLocation(mShaderProgram, "normal");
 	if (mNormalAttribute < 0) {
@@ -455,6 +481,7 @@ void MyTracks::Show(){
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
 		glEnable(GL_BLEND);
+		glEnable(GL_TEXTURE_3D);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glBindVertexArray(mVertexArray);
 		glUseProgram(mShaderProgram);
@@ -469,31 +496,16 @@ void MyTracks::Show(){
 		glGetFloatv(GL_PROJECTION_MATRIX, projMat);
 		glUniformMatrix4fv(projmatLocation, 1, GL_FALSE, projMat);
 
-		int boxLowLocation1 = glGetUniformLocation(mShaderProgram, "boxLow1");
-		int boxHighLocation1 = glGetUniformLocation(mShaderProgram, "boxHigh1");
-		//MyVec3f lowPos1 = box[0].GetLowPos() + mTracts->GetBoundingBox().GetCenter();
-		//MyVec3f highPos1 = box[0].GetHighPos() + mTracts->GetBoundingBox().GetCenter();
-		MyVec3f lowPos1(0, 0, 0);
-		MyVec3f highPos1(0, 0, 0);
-		glUniform3f(boxLowLocation1, lowPos1[0], lowPos1[1], lowPos1[2]);
-		glUniform3f(boxHighLocation1, highPos1[0], highPos1[1], highPos1[2]);
+		int colorLocation = glGetUniformLocation(mShaderProgram, "color");
+		float color[3] = {0.5,0.5,0.5};
+		glUniform3fv(colorLocation, GL_FALSE, color);
 
-		int boxLowLocation2 = glGetUniformLocation(mShaderProgram, "boxLow2");
-		int boxHighLocation2 = glGetUniformLocation(mShaderProgram, "boxHigh2");
-		//MyVec3f lowPos2 = box[1].GetLowPos() + mTracts->GetBoundingBox().GetCenter();
-		//MyVec3f highPos2 = box[1].GetHighPos() + mTracts->GetBoundingBox().GetCenter();
-		MyVec3f lowPos2(0, 0, 0);
-		MyVec3f highPos2(0, 0, 0);
-		glUniform3f(boxLowLocation2, lowPos2[0], lowPos2[1], lowPos2[2]);
-		glUniform3f(boxHighLocation2, highPos2[0], highPos2[1], highPos2[2]);
-
-		int screenSpaceLocation = glGetUniformLocation(mShaderProgram, "screenSpace");
-		//int screenSpace = mbScreenSpace ? 1 : 0;
-		int screenSpace = 0;
-		glUniform1i(screenSpaceLocation, screenSpace);
+		int filterVolLocation = glGetUniformLocation(mShaderProgram, "filterVol");
+		glUniform1i(filterVolLocation, 0);
+		glActiveTexture(GL_TEXTURE0 + 0);
+		glBindTexture(GL_TEXTURE_3D, mFilterVolumeTexture);
 
 		if (mShape == TRACK_SHAPE_TUBE){
-			//glDrawElements(GL_TRIANGLES, mIndices.size(), GL_UNSIGNED_INT, 0);
 			for (int i = 0; i < mFiberToDraw.size(); i++){
 				int fiberIdx = mFiberToDraw[i];
 				int offset = (mIdxOffset[fiberIdx]/(mFaces+1)-fiberIdx)*mFaces*6;
@@ -510,10 +522,11 @@ void MyTracks::Show(){
 			}
 		}
 
-		glDisable(GL_BLEND);
 		glUseProgram(0);
 		glBindVertexArray(0);
+		glDisable(GL_BLEND);
 		glDisable(GL_CULL_FACE);
+		glDisable(GL_TEXTURE_3D);
 	//}
 	//else{
 	//	int offset = 0;
@@ -548,10 +561,26 @@ void MyTracks::MaskFiber(MyTracks* tracks, Array3D<float>* mask, int startIdx, i
 			}
 		}
 	}
+}
 
+void MyTracks::FiberVolumeDensity(MyTracks* tracks,
+	Array3D<atomic<int>>* density, const MyArrayi* indices, int startIdx, int endIdx){
+	for (int i = startIdx; i <= endIdx; i++){
+		int it = indices->at(i);
+		long lastX = -1, lastY = -1, lastZ = -1;
+		for (int j = 0; j < tracks->GetNumVertex(it); j++){
+			long x, y, z;
+			tracks->GetVoxelIndex(tracks->GetCoord(it, j), x, y, z);
+			if (lastX != x || lastY != y || lastZ != z){
+				density->operator()(x, y, z)++;
+				lastX = x; lastY = y; lastZ = z;
+			}
+		}
+	}
 }
 
 void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
+	if (mTracks.empty()) return;
 	mFiberToDraw.clear();
 	mFiberDraw = MyArrayb(mTracks.size(), false);
 	// mask the fibers
@@ -572,7 +601,8 @@ void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
 	//MaskFiber(this, &mask, 0, mTracks.size() - 1);
 
 	// multi-thread edition
-	int numThread = std::thread::hardware_concurrency()-1;
+	int numThread = std::thread::hardware_concurrency() - 1;
+	numThread = min(numThread, (int)mTracks.size());
 	std::thread *tt = new std::thread[numThread - 1];
 	float fiberPerThread = mTracks.size() / (float)numThread;
 	for (int i = 0; i < numThread-1; i++){
@@ -591,7 +621,7 @@ void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
 		}
 	}
 
-	std::cout << "Filter: " << mFiberToDraw.size() << " fibers to be drawn.\n";
+	//std::cout << "Filter: " << mFiberToDraw.size() << " fibers to be drawn.\n";
 		/*
 	// updating indices
 	if (mShape == TRACK_SHAPE_TUBE){
@@ -649,4 +679,82 @@ void MyTracks::FilterByVolumeMask(Array3D<float>& mask){
 	}
 
 		*/
+}
+
+void MyTracks::AddVolumeFilter(RicVolume& vol){
+	if (glIsTexture(mFilterVolumeTexture)){
+		glDeleteTextures(1, &mFilterVolumeTexture);
+	}
+	glGenTextures(1, &mFilterVolumeTexture);
+	glBindTexture(GL_TEXTURE_3D, mFilterVolumeTexture);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+	// map x,y,z to z,y,x
+	float *d = new float[vol.nvox];
+	for (int i = 0; i < vol.get_numx(); i++){
+		for (int j = 0; j < vol.get_numy(); j++){
+			for (int k = 0; k < vol.get_numz(); k++){
+				//if (vol.vox[i][j][k] > 0.1) cout << vol.vox[i][j][k] << endl;
+				d[k*vol.get_numx()*vol.get_numy() + j*vol.get_numx() + i]
+					= vol.vox[i][j][k];
+			}
+
+		}
+	}
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16F, vol.get_numx(), vol.get_numy(), vol.get_numz(), 0, GL_RED, GL_FLOAT, d);
+	delete[]d;
+
+	glBindTexture(GL_TEXTURE_3D, 0);
+}
+
+void MyTracks::ToDensityVolume(float* densityVol, int x, int y, int z){
+	if (mFiberToDraw.size() == 0){
+		memset(densityVol, 0, x*y*z*sizeof(float));
+		return;
+	}
+	Array3D<atomic<int>> density;
+	density.Construct(x, y, z);
+	for (int i = 0; i < x; i++){
+		for (int j = 0; j < y; j++){
+			for (int k = 0; k < z; k++){
+				density(i, j, k).store(0);
+			}
+		}
+	}
+	int numThread = std::thread::hardware_concurrency() - 1;
+	numThread = min(numThread, (int)mFiberToDraw.size());
+	std::thread *tt = new std::thread[numThread - 1];
+	float fiberPerThread = mFiberToDraw.size() / (float)numThread;
+	for (int i = 0; i < numThread - 1; i++){
+		int startIdx = fiberPerThread*i;
+		int endIdx = fiberPerThread*(i + 1) - 1;
+		tt[i] = std::thread(FiberVolumeDensity, this, &density, &mFiberToDraw, startIdx, endIdx);
+	}
+	FiberVolumeDensity(this, &density, &mFiberToDraw, fiberPerThread*(numThread - 1), mFiberToDraw.size() - 1);
+	for (int i = 0; i < numThread - 1; i++){
+		tt[i].join();
+	}
+	delete[] tt;
+
+	int idx = 0;
+	float maxValue = 0;
+	for (int i = 0; i < x; i++){
+		for (int j = 0; j < y; j++){
+			for (int k = 0; k < z; k++){
+				densityVol[idx] = (float)density(i, j, k).load();
+				maxValue = max(maxValue, densityVol[idx]);
+				idx++;
+			}
+		}
+	}
+	if (maxValue > 0){
+		for (int i = 0; i < x*y*z; i++){
+			densityVol[i] /= maxValue;
+		}
+	}
 }

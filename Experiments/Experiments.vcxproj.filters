@@ -264,6 +264,12 @@
     <ClCompile Include="OSCB.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MyVolumeRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyDiffHistogramPixel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shader.h">
@@ -470,6 +476,12 @@
     <ClInclude Include="OSCB.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MyVolumeRenderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyDiffHistogramPixel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="raycasting.vert">
@@ -518,6 +530,21 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="contour.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="tracks.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="tracks.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="trackVol.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="trackVol.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="trackVol_pcwLinear.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

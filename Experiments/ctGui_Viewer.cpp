@@ -13,6 +13,7 @@
 #include "MyTracks.h"
 #include "MyDifferenceTree.h"
 #include "Ric\RicVolume.h"
+#include "MyVolumeRenderer.h"
 
 #define BOARDER_X 0.05
 #define BOARDER_Y 0.05
@@ -24,7 +25,7 @@
 #define BOARDER_Y_RANGE (1+BOARDER_Y+BOARDER_Y)
 
 bool showTracks = false;
-bool showMesh = false;
+bool showMesh = true;
 bool showSecTree = true;
 bool showDiffTree = true;
 int gl_error;
@@ -37,6 +38,7 @@ float magnifier_scale = 5;
 float fishEye_focusRadiusRatio = 0.5;
 bool useFisyeye = true;
 MyTracks track;
+MyVolumeRenderer trackRenderer;
 /**************************************** GL ********************/
 #define DSR_FACTOR_X 2
 #define DSR_FACTOR_Y 2
@@ -354,7 +356,7 @@ float offsetX[] = { 0, 0, 0 };
 float offsetY[] = { 0, BOARDER_TOP + BOARDER_Y + BOARDER_Y_RANGE, BOARDER_TOP + BOARDER_Y };
 float lastOffsetX, lastOffsetY;
 float isovalue = 0.8;
-int pruningThreshold = 10;
+int pruningThreshold = 20;
 float sigArcP = 0.01;
 float sigArcVr = 0.5;
 int sourceCt = -1;
@@ -400,15 +402,28 @@ int UI_comparison = 0;
 int UI_snapPos = 2;
 float UI_contourTreeAlpha_front = 1;
 float UI_contourTreeAlpha_back = 1;
-int UI_drawTracks = 1;
+int UI_drawTracks = 0;
+int UI_drawTrackVol = 1;
 int UI_drawMesh = 1;
 int UI_drawROI = 0;
 GLUI_Spinner* roiRatioSpinner;
 float UI_roiRatio = 0.9;
 int UI_diff = 1;
-int UI_hoverOnContour = 1;
+int UI_hoverOnContour = 0;
 int UI_hoverOnCt = 0;
 float UI_labelDrawRatio = 1;
+int UI_labelSolid = 1;
+int UI_labelBoarder = 1;
+int UI_outsidePlacement = 0;
+float UI_trackDensityFilter = 0.1;
+int UI_drawContour0 = 1, UI_drawContour1;
+int UI_3DLegend = 0, UI_2DLegend = 1;
+float UI_sampleRate = 1024;
+float UI_decayFactor = 1024;
+int UI_diffColor = 0;
+float UI_diffTreeLesserAlpha = 0.3;
+GLUI_Checkbox* trackCheckbox;
+GLUI_Checkbox* trackVolCheckbox;
 
 #define UI_ALTSCALE_ID 4
 
@@ -434,10 +449,17 @@ int GetFieldIdx(int x, int y){
 	if (fields[1] == 0) return 0;
 	float ctx, cty;
 	screen2ctspace(x, y, ctx, cty);
-	float dist1 = pow(offsetX[0] + 0.5 - ctx, 2) + pow(offsetY[0] + 0.5 - cty, 2);
-	float dist2 = pow(offsetX[1] + 0.5 - ctx, 2) + pow(offsetY[1] + 0.5 - cty, 2);
-	if (dist1 < dist2) return 0;
-	else return 1;
+	float dist0 = pow(offsetX[0] + 0.5 - ctx, 2) + pow(offsetY[0] + 0.5 - cty, 2);
+	float dist1 = pow(offsetX[1] + 0.5 - ctx, 2) + pow(offsetY[1] + 0.5 - cty, 2);
+	float dist2 = pow(offsetX[2] + 0.5 - ctx, 2) + pow(offsetY[2] + 0.5 - cty, 2);
+	if (dist0 < dist1) {
+		if (dist0 < dist2) return 0;
+		else return 2;
+	}
+	else{
+		if (dist1 < dist2) return 1;
+		else return 2;
+	}
 }
 
 void selectArcSnap(int x, int y, int field){
@@ -491,15 +513,23 @@ void aggregateArc(int x, int y, int field){
 	float ctx, cty;
 	screen2ctspace(x, y, ctx, cty);
 	long arc = fields[field]->PickArc(ctx - offsetX[field], cty - offsetY[field]);
-	if (arc != -1){
+	if (arc >= 0){
 		if (!fields[field]->IsArcAggregated(arc)){
 			fields[field]->AggregateArcFromAbove(arc);
 		}
 		else{
 			fields[field]->RestoreAggregatedArc(arc);
 		}
+		if(field==0) fields[field]->UpdateSigArcList();
 		fields[field]->ComputeArcNames();
 		fields[field]->SetNodeXPositionsExt(defaultScale);
+		fields[field]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+		if (field == 0 && showDiffTree){
+			diffTree->UpdateArcMapping();
+			diffTree->UpdateDifferenceHistogramPixel();
+			diffTree->UpdateLayout();
+			diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+		}
 	}
 	else{
 		if (ctx - offsetX[field] < 0){
@@ -508,6 +538,20 @@ void aggregateArc(int x, int y, int field){
 			fields[field]->UpdateContours();
 		}
 	}
+}
+
+
+void updateTrackVolume(){
+	if (!showTracks) return;
+	//Array3D<float>& maskVol = fields[0]->GetMaskVolume();
+	//trackRenderer.LoadVolume(&(maskVol(0, 0, 0)), maskVol.XDim(), maskVol.YDim(), maskVol.ZDim());
+	int x = fields[0]->GetMaskVolume().XDim();
+	int y = fields[0]->GetMaskVolume().YDim();
+	int z = fields[0]->GetMaskVolume().ZDim();
+	float* densityVol = new float[x*y*z];
+	track.ToDensityVolume(densityVol, x, y, z);
+	trackRenderer.LoadVolume(densityVol, x, y, z);
+	delete densityVol;
 }
 
 void updateScaleWidth(){
@@ -586,6 +630,72 @@ void updateAltScale(){
 
 void updateLayout(int control);
 
+void aggregateAllBranchArcs(int field){
+	fields[0]->AggregateAllBranches();
+	fields[0]->UpdateSigArcList();
+	fields[0]->ComputeArcNames();
+	fields[0]->SetNodeXPositionsExt(defaultScale);
+	fields[0]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	if (fields[1]){
+		fields[1]->AggregateAllBranches();
+		fields[1]->ComputeArcNames();
+		fields[1]->SetNodeXPositionsExt(defaultScale);
+		fields[1]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	}
+	if (field == 0 && showDiffTree){
+		diffTree->UpdateArcMapping();
+		diffTree->UpdateDifferenceHistogramPixel();
+		diffTree->UpdateLayout();
+		diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	}
+
+	updateScaleWidth();
+}
+
+void restoreAllAggregated(int field){
+	fields[0]->RestoreAllAggregated();
+	fields[0]->UpdateSigArcList();
+	fields[0]->ComputeArcNames();
+	fields[0]->SetNodeXPositionsExt(defaultScale);
+	fields[0]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	if (fields[1]){
+		fields[1]->RestoreAllAggregated();
+		fields[1]->ComputeArcNames();
+		fields[1]->SetNodeXPositionsExt(defaultScale);
+		fields[1]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	}
+	if (field == 0 && showDiffTree){
+		diffTree->UpdateArcMapping();
+		diffTree->UpdateDifferenceHistogramPixel();
+		diffTree->UpdateLayout();
+		diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	}
+
+	updateScaleWidth();
+}
+
+void updateDiffTexture(int control){
+	if (UI_diffColor == 1){
+		if (fields[0] && fields[1]){
+			Array3D<float> diff;
+			diff.Construct(fields[0]->GetDimX(), fields[0]->GetDimY(), fields[0]->GetDimZ());
+			for (int i = 0; i < fields[0]->GetDimX(); i++){
+				for (int j = 0; j < fields[0]->GetDimY(); j++){
+					for (int k = 0; k < fields[0]->GetDimZ(); k++){
+						diff(i, j, k) = fields[0]->GetValue(i, j, k) - fields[1]->GetValue(i, j, k);
+					}
+				}
+			}
+			fields[0]->LoadDiffColorTexture(diff, diffTree->GetMinDiff(), diffTree->GetMaxDiff());
+			fields[1]->LoadDiffColorTexture(diff, diffTree->GetMinDiff(), diffTree->GetMaxDiff());
+		}
+	}
+	else{
+		fields[0]->RemoveDiffColorTexture();
+		if (fields[1]) fields[1]->RemoveDiffColorTexture();
+	}
+}
+
 void handleRightClick(int x, int y, int field, int otherField){
 	sourceCt = -1;
 	targetCt = -1;
@@ -638,6 +748,7 @@ void handleSnapRelease(int field, int otherField){
 void drawContourTrees(int x, int y, int width, int height){
 
 	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
+	glDisable(GL_DEPTH_TEST);
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix(); {
 		glLoadIdentity();
@@ -656,27 +767,39 @@ void drawContourTrees(int x, int y, int width, int height){
 			glPushMatrix();
 			glTranslatef(offsetX[0], offsetY[0], 0);
 			fields[0]->DrawPlanarContourTree();
+			if (hoverCtID == 0){
+				fields[0]->DrawArcLabelHighlight(hoverArcID);
+			}
 			glPopMatrix();
 			if (showDiffTree && fields[1] != 0){
 				glPushMatrix();
 				glTranslatef(offsetX[2], offsetY[2], 0);
+				diffTree->SetLesserHistogramAlpha(UI_diffTreeLesserAlpha);
 				diffTree->Show();
+				if (hoverCtID == 2){
+					diffTree->DrawArcLabelHighlight(hoverArcID);
+				}
 				glPopMatrix();
 			}
 			if (fields[1] != 0){
 				glPushMatrix();
 				glTranslatef(offsetX[1], offsetY[1], 0);
 				fields[1]->DrawPlanarContourTree();
+				if (hoverCtID == 1){
+					fields[1]->DrawArcLabelHighlight(hoverArcID);
+				}
 				glPopMatrix();
 			}
 			// draw legend
-			fields[0]->DrawLegendSimple(MyVec2f(0.95, 1.9), MyVec2f(1, 2.1));
-			if (showDiffTree){
-				glPushMatrix();
-				glTranslatef(0.95, 1.8,0);
-				glScalef(0.05, 0.04, 1);
-				diffTree->ShowLegend();
-				glPopMatrix();
+			if (UI_2DLegend){
+				fields[0]->DrawLegendSimple(MyVec2f(0.95, 1.9), MyVec2f(1, 2.1));
+				if (showDiffTree){
+					glPushMatrix();
+					glTranslatef(0.95, 1.8, 0);
+					glScalef(0.05, 0.04, 1);
+					diffTree->ShowLegend();
+					glPopMatrix();
+				}
 			}
 
 			// draw arc view
@@ -701,6 +824,8 @@ void drawContourTrees(int x, int y, int width, int height){
 		}glPopMatrix();
 		glMatrixMode(GL_PROJECTION);
 	}glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glEnable(GL_DEPTH_TEST);
 }
 
 void drawContours(int x, int y, int width, int height){
@@ -712,7 +837,7 @@ void drawContours(int x, int y, int width, int height){
 			-fields[0]->GetVolume().YDim() / 2,
 			-fields[0]->GetVolume().ZDim() / 2);
 		//fields[0]->FlexibleContours();
-		fields[0]->RenderContours();
+		if (UI_drawContour0 == 1) fields[0]->RenderContours();
 		//fields[0]->ShowSelectedVoxes();
 		if (UI_drawROI){
 			fields[0]->RenderAllUpperLeaveContours(UI_roiRatio);
@@ -722,75 +847,79 @@ void drawContours(int x, int y, int width, int height){
 			//glColor4fv(color2);
 			//fields[1]->FlexibleContours(true, false);
 			//fields[1]->FlexibleContours();
-			fields[1]->RenderContours();
+			if (UI_drawContour1 == 1) fields[1]->RenderContours();
 		}
-		if (drawHoverContur){
+		if (drawHoverContur && hoverCtID < 2){
 			fields[hoverCtID]->DrawArcContour(hoverArcID);
 		}
 	}glPopMatrix();
 
-	// draw color patch
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix(); {
-		glLoadIdentity();
-		glOrtho(BOARDER_LEFT, BOARDER_RIGHT, BOARDER_BOTTOM, BOARDER_TOP, -1.0, 1.0);
-		glMatrixMode(GL_MODELVIEW);
+	if (UI_3DLegend == 1){
+		// draw color patch
+		glDisable(GL_LIGHTING);
+		glMatrixMode(GL_PROJECTION);
 		glPushMatrix(); {
 			glLoadIdentity();
-			/********* Draw Color Patch ***********/
-			//glDepthFunc(GL_ALWAYS);
-			float leftBottomQuad1[] = { 0.7, 0.02 };
-			float leftBottomQuad2[] = { 0.7, 0.05 };
-			float sizeQuad = 0.02;
-			glBegin(GL_QUADS);
-			//glColor4f(1, 0, 0, 1);
-			glColor3fv(contourColor[0]);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
-			glEnd();
-			glColor4f(0, 0, 0, 1);
-			// give them some outline
-			glBegin(GL_LINE_LOOP);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
-			glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
-			glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
-			glEnd();
-			glRasterPos2f(leftBottomQuad1[0] + sizeQuad + 0.005, leftBottomQuad1[1]);
-			glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[0]->GetName().c_str());
-
-			if (fields[1]){
+			glOrtho(BOARDER_LEFT, BOARDER_RIGHT, BOARDER_BOTTOM, BOARDER_TOP, -1.0, 1.0);
+			glMatrixMode(GL_MODELVIEW);
+			glPushMatrix(); {
+				glLoadIdentity();
+				/********* Draw Color Patch ***********/
+				//glDepthFunc(GL_ALWAYS);
+				float leftBottomQuad1[] = { 0.7, 0.02 };
+				float leftBottomQuad2[] = { 0.7, 0.05 };
+				float sizeQuad = 0.02;
 				glBegin(GL_QUADS);
-				//glColor4f(0, 0, 1, 1);
-				glColor3fv(contourColor[1]);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
+				//glColor4f(1, 0, 0, 1);
+				glColor3fv(contourColor[0]);
+				glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
+				glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
+				glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
+				glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
 				glEnd();
 				glColor4f(0, 0, 0, 1);
+				// give them some outline
 				glBegin(GL_LINE_LOOP);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
-				glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
-				glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
+				glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1]);
+				glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1]);
+				glVertex2f(leftBottomQuad1[0] + sizeQuad, leftBottomQuad1[1] + sizeQuad);
+				glVertex2f(leftBottomQuad1[0], leftBottomQuad1[1] + sizeQuad);
 				glEnd();
-				glRasterPos2f(leftBottomQuad2[0] + sizeQuad + 0.005, leftBottomQuad2[1]);
-				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[1]->GetName().c_str());
+				glRasterPos2f(leftBottomQuad1[0] + sizeQuad + 0.005, leftBottomQuad1[1]);
+				glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[0]->GetName().c_str());
+
+				if (fields[1]){
+					glBegin(GL_QUADS);
+					//glColor4f(0, 0, 1, 1);
+					glColor3fv(contourColor[1]);
+					glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
+					glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
+					glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
+					glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
+					glEnd();
+					glColor4f(0, 0, 0, 1);
+					glBegin(GL_LINE_LOOP);
+					glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1]);
+					glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1]);
+					glVertex2f(leftBottomQuad2[0] + sizeQuad, leftBottomQuad2[1] + sizeQuad);
+					glVertex2f(leftBottomQuad2[0], leftBottomQuad2[1] + sizeQuad);
+					glEnd();
+					glRasterPos2f(leftBottomQuad2[0] + sizeQuad + 0.005, leftBottomQuad2[1]);
+					glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char *)fields[1]->GetName().c_str());
+				}
+				//glDepthFunc(GL_LESS);
 			}
-			//glDepthFunc(GL_LESS);
+			glPopMatrix();
+			glMatrixMode(GL_PROJECTION);
 		}
 		glPopMatrix();
-		glMatrixMode(GL_PROJECTION);
+		glMatrixMode(GL_MODELVIEW);
 	}
-	glPopMatrix();
 }
 
 void drawTracks(int x, int y, int width, int height){
-	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
-	if (showTracks){
+	if (showTracks && UI_drawTracks == 1){
+		MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
 		glPushMatrix(); {
 			MyGraphicsTool::LoadTrackBall(&trackBall);
 			glTranslatef(-fields[0]->GetVolume().XDim() / 2,
@@ -808,8 +937,8 @@ void drawTracks(int x, int y, int width, int height){
 }
 
 void drawMesh(int x, int y, int width, int height){
-	MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
 	if (showMesh){
+		MyGraphicsTool::SetViewport(MyVec4i(x, y, width, height));
 		glPushMatrix(); {
 			MyGraphicsTool::LoadTrackBall(&trackBall);
 			drawMeshGlass(mesh);
@@ -875,6 +1004,7 @@ void updateOpenFile(int control){
 			fields[0]->ComputeArcNames();
 			fields[0]->SetIsosurface(isovalue);
 			fields[0]->SetNodeXPositionsExt(defaultScale);
+			fields[0]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 			fields[0]->SetContourColour(contourColor[0]);
 			fields[0]->SetIndex(0);
 			fields[0]->CompileContourShader();
@@ -891,15 +1021,20 @@ void updateOpenFile(int control){
 				fields[0]->UpdateSigArcList();
 				diffTree->SetContourTrees(fields[0], fields[1]);
 				diffTree->UpdateArcMapping();
-				diffTree->UpdateDifferenceHistogram();
+				//diffTree->UpdateDifferenceHistogram();
+				diffTree->UpdateDifferenceHistogramPixel();
+				diffTree->UpdateLayout();
+				diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 			}
 
 			if (fields[1]){
 				MyContourTree::RenameLeaveArcsBySimilarity(fields[0], fields[1]);
 			}
+
+			updateDiffTexture(-1);
 		}
 		else if (control == 1){
-			// change control volume 
+			// change scz volume 
 			cout << "Diseased Updated to " << str << endl;
 			delete fields[1];
 			char filename[300];
@@ -913,6 +1048,7 @@ void updateOpenFile(int control){
 			fields[1]->ComputeArcNames();
 			fields[1]->SetIsosurface(isovalue);
 			fields[1]->SetNodeXPositionsExt(defaultScale);
+			fields[1]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 			fields[1]->SetContourColour(contourColor[1]);
 			fields[1]->SetIndex(1);
 			fields[1]->CompileContourShader();
@@ -923,7 +1059,8 @@ void updateOpenFile(int control){
 				fields[1]->SyncSigArcsTo(fields[0]);
 				diffTree->SetContourTrees(fields[0], fields[1]);
 				diffTree->UpdateArcMapping();
-				diffTree->UpdateDifferenceHistogram();
+				//diffTree->UpdateDifferenceHistogram();
+				diffTree->UpdateDifferenceHistogramPixel();
 			}
 
 			updateScaleWidth();
@@ -931,9 +1068,10 @@ void updateOpenFile(int control){
 			fields[1]->SetNodeXPositionsExt(defaultScale);
 			MyContourTree::RenameLeaveArcsBySimilarity(fields[0], fields[1]);
 			showSecTree = true;
+			updateDiffTexture(-1);
 		}
 		else if (control == 2){
-			// change control volume 
+			// change tbss 
 			cout << "TBSS stats Updated to " << str << endl;
 			showDiffTree = true;
 			delete tbssSigVol;
@@ -945,8 +1083,28 @@ void updateOpenFile(int control){
 			if (!diffTree) diffTree = new MyDifferenceTree;
 			diffTree->SetContourTrees(fields[0], fields[1]);
 			diffTree->UpdateArcMapping();
-			diffTree->UpdateDifferenceHistogram();
-
+			//diffTree->UpdateDifferenceHistogram();
+			diffTree->UpdateDifferenceHistogramPixel();
+			diffTree->UpdateLayout();
+			diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+		}
+		else if (control == 3){
+			// change tracks
+			if (track.Read(str) == 1){
+				if (!showTracks){
+					showTracks = true;
+					trackCheckbox->enable();
+					trackVolCheckbox->enable();
+					trackRenderer.CompileShader();
+					trackRenderer.Resize(windowWidth / 3, windowHeight);
+					fields[0]->MarkSelectedVoxes();
+				}
+				track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+				updateTrackVolume();
+				track.ComputeGeometry();
+				track.LoadShader();
+				track.LoadGeometry();
+			}
 		}
 	}
 	glutPostRedisplay();
@@ -958,14 +1116,33 @@ void updateAlpha(int control){
 }
 
 void updateComponent(int control){
-	showTracks = (UI_drawTracks == 1);
 	showMesh = (UI_drawMesh == 1);
 }
 
 void updateLabels(int control){
-	if (showDiffTree){
-		diffTree->SetLabelDrawRatio(UI_labelDrawRatio);
-		if (showDiffTree) diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+
+	if (control == 1){
+		fields[0]->SetLabelDrawRatio(UI_labelDrawRatio);
+		if (fields[1]) {
+			fields[1]->SetLabelDrawRatio(UI_labelDrawRatio);
+		}
+		if (showDiffTree){
+			diffTree->SetLabelDrawRatio(UI_labelDrawRatio);
+		}
+	}
+	else{
+		unsigned char labelStyle = 0;
+		if (UI_labelSolid == 1){
+			labelStyle |= MyContourTree::LabelStyle_SOLID;
+			labelStyle |= MyContourTree::LabelStyle_BOARDER;
+		}
+		if (UI_labelBoarder == 1){
+			labelStyle |= MyContourTree::LabelStyle_BOARDER;
+		}
+		fields[0]->SetLabelStyle(labelStyle);
+		if (fields[1]) {
+			fields[1]->SetLabelStyle(labelStyle);
+		}
 	}
 }
 
@@ -985,6 +1162,11 @@ void updateDiff(int control){
 			break;
 		}
 		fields[1]->SyncSigArcsTo(fields[0]);
+	}
+	if (showDiffTree){
+		diffTree->SetUseOutsidePlacement(UI_outsidePlacement == 1);
+		diffTree->UpdateLayout();
+		diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 	}
 }
 
@@ -1069,15 +1251,20 @@ void updateLayout(int control){
 		fields[1]->SetHistogramSide(histogramSide);
 	}
 
-	// set alt scale
-	//if (control == UI_ALTSCALE_ID){
-		updateAltScale();
-	//}
+	updateAltScale();
 
 	fields[0]->SetNodeXPositionsExt(defaultScale);
+	fields[0]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+
 	if (fields[1]){
 		fields[1]->SetNodeXPositionsExt(defaultScale);
+		fields[1]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 		updateScaleWidth();
+	}
+
+	if (showDiffTree){
+		diffTree->UpdateLayout();
+		diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 	}
 }
 
@@ -1086,21 +1273,24 @@ void updatePruning(int control){
 		//return;
 		if (fields[0]){
 			fields[0]->ClearComparedArcs();
+			fields[0]->RestoreAllAggregated();
 			fields[0]->SetPruningThreshold(pruningThreshold);
 			fields[0]->PruneNoneROIs();
 			fields[0]->ComputeArcNames();
 			fields[0]->SetIsosurface(isovalue);
 			fields[0]->SetNodeXPositionsExt(defaultScale);
+			fields[0]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 			if (showDiffTree) fields[0]->UpdateSigArcList();
 		}
 		if (fields[1]){
 			fields[1]->ClearComparedArcs();
+			fields[1]->RestoreAllAggregated();
 			fields[1]->SetPruningThreshold(pruningThreshold);
 			fields[1]->PruneNoneROIs();
 			fields[1]->ComputeArcNames();
 			fields[1]->SetIsosurface(isovalue);
 			fields[1]->SetNodeXPositionsExt(defaultScale);
-
+			fields[1]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 			if (showDiffTree) fields[1]->SyncSigArcsTo(fields[0]);
 
 			updateScaleWidth();
@@ -1109,7 +1299,10 @@ void updatePruning(int control){
 
 	if (showDiffTree){
 		diffTree->UpdateArcMapping();
-		diffTree->UpdateDifferenceHistogram();
+		//diffTree->UpdateDifferenceHistogram();
+		diffTree->UpdateDifferenceHistogramPixel();
+		diffTree->UpdateLayout();
+		diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 	}
 }
 
@@ -1127,9 +1320,57 @@ void updateSigArcs(int control){
 			fields[1]->SetSigArcThreshold_VolRatio(sigArcVr);
 			if (showDiffTree) fields[1]->SyncSigArcsTo(fields[0]);
 		}
+		if (showDiffTree){
+			diffTree->UpdateArcMapping();
+			//diffTree->UpdateDifferenceHistogram();
+			diffTree->UpdateDifferenceHistogramPixel();
+			diffTree->UpdateLayout();
+			diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+		}
 	}
 }
 
+void setViewpoint(int control){
+	switch (control)
+	{
+	case 1:
+		// superior
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(0, 0, 1, 0));
+		glutPostRedisplay();
+		break;
+	case 2:
+		// inferior
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(180, 0, 1, 0));
+		glutPostRedisplay();
+		break;
+	case 3:
+		// left
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(90, 0, 0, 1)*MyMatrixf::RotateMatrix(90, 0, 1, 0));
+		glutPostRedisplay();
+		break;
+	case 4:
+		// right
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(-90, 0, 0, 1)*MyMatrixf::RotateMatrix(-90, 0, 1, 0));
+		glutPostRedisplay();
+		break;
+	case 5:
+		// anterior
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(90, 1, 0, 0));
+		glutPostRedisplay();
+		break;
+	case 6:
+		// posterior
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(180, 0, 0, 1)*MyMatrixf::RotateMatrix(-90, 1, 0, 0));
+		glutPostRedisplay();
+		break;
+	case 7:
+	default:
+		// custom
+		trackBall.SetRotationMatrix(MyMatrixf::RotateMatrix(45, -1, 1, 0)*MyMatrixf::RotateMatrix(90, 0, 0, 1)*MyMatrixf::RotateMatrix(90, 0, 1, 0));
+		glutPostRedisplay();
+		break;
+	}
+}
 
 /**************************************** GLUT Callback ********************/
 
@@ -1143,7 +1384,10 @@ void myGlutKeyboard(unsigned char Key, int x, int y)
 		break;
 	case 'r':
 	case 'R':
-		if(showTracks) track.LoadShader();
+		if (showTracks){
+			track.LoadShader();
+			trackRenderer.CompileShader();
+		}
 		fields[0]->ReCompileShaders();
 		fields[0]->CompileContourShader();
 		CompileShader();
@@ -1177,38 +1421,54 @@ void myGlutMouse(int button, int state, int x, int y)
 			dragFocus = DRAG_FOCUS_VOL_0;
 
 			// test read pixels
-			glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
-			glReadBuffer(GL_COLOR_ATTACHMENT0 + 1);
-			glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
-				GL_RGBA_INTEGER, GL_INT, nameMap);
-			//glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
-			//	GL_RGBA, GL_FLOAT, pixels);
-			//for (int i = 0; i < contourBuffer.width*contourBuffer.height * 4; i++) if(pixels[i]>0) cout << pixels[i];
-			cout << "Clicked Color: " 
-				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4] << ", "
-				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 1] << ", "
-				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2] << ", "
-				<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3] << endl;
-			long arcID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
-			long ctID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
-			if (arcID < 999999 && ctID<=1 && ctID >=0){
-				if (fields[ctID]){
-					fields[ctID]->ClickComparedArc(arcID);
-					if (fields[1 - ctID]) fields[1 - ctID]->CompareArcs(fields[ctID]);
+			if (nameMap == 0) return;
+			if (UI_hoverOnContour == 1){
+				glBindFramebuffer(GL_FRAMEBUFFER, contourBuffer.frameBuffer);
+				glReadBuffer(GL_COLOR_ATTACHMENT0 + 1);
+				glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
+					GL_RGBA_INTEGER, GL_INT, nameMap);
+				//glReadPixels(0, 0, contourBuffer.width, contourBuffer.height,
+				//	GL_RGBA, GL_FLOAT, pixels);
+				//for (int i = 0; i < contourBuffer.width*contourBuffer.height * 4; i++) if(pixels[i]>0) cout << pixels[i];
+				cout << "Clicked Color: "
+					<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4] << ", "
+					<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 1] << ", "
+					<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2] << ", "
+					<< nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3] << endl;
+				long arcID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 2];
+				long ctID = nameMap[(windowHeight - y - 1)*contourBuffer.width * DSR_FACTOR_Y * 4 + x*DSR_FACTOR_X * 4 + 3];
+				if (arcID < 999999 && ctID <= 1 && ctID >= 0){
+					if (fields[ctID]){
+						fields[ctID]->ClickComparedArc(arcID);
+						if (fields[1 - ctID]) fields[1 - ctID]->CompareArcs(fields[ctID]);
+					}
+					updateLayout(-1);
 				}
-				updateLayout(-1);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			}
 		}
 		else {
 			int fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
-			if (button == GLUT_LEFT_BUTTON){
+			// diff tree only handles magnify
+			if (fieldIdx > 1){
+				if (button == GLUT_MIDDLE_BUTTON){
+					isMagnifying = true;
+					magnifier_xPos = x;
+					magnifier_yPos = windowHeight - y;
+					dragFocus = DRAG_FOCUS_NONE;
+				}
+			}
+			else if (button == GLUT_LEFT_BUTTON){
+				// alt keys makes aggregation
 				if (glutGetModifiers() == GLUT_ACTIVE_ALT){
 					aggregateArc(x - windowWidth / 3, windowHeight - y, fieldIdx);
 				}
+				// else select the arc
 				else{
 					selectArc(x - windowWidth / 3, windowHeight - y, fieldIdx);
 					fields[0]->MarkSelectedVoxes();
 					track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+					updateTrackVolume();
 				}
 				dragFocus = DRAG_FOCUS_TREE_0 + fieldIdx;
 			}
@@ -1217,10 +1477,10 @@ void myGlutMouse(int button, int state, int x, int y)
 				dragFocus = DRAG_FOCUS_TREE_0 + fieldIdx;
 			}
 			else if (button == GLUT_MIDDLE_BUTTON){
-				isMagnifying = true;
-				magnifier_xPos = x;
-				magnifier_yPos = windowHeight - y;
-				dragFocus = DRAG_FOCUS_NONE;
+					isMagnifying = true;
+					magnifier_xPos = x;
+					magnifier_yPos = windowHeight - y;
+					dragFocus = DRAG_FOCUS_NONE;
 			}
 		}
 	}
@@ -1278,6 +1538,7 @@ void myGlutMotion(int x, int y)
 				fields[0]->UpdateContours();
 				fields[0]->MarkSelectedVoxes();
 				track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+				updateTrackVolume();
 			}
 		}
 	}
@@ -1360,23 +1621,40 @@ void myGlutPassiveMotion(int x, int y){
 		}
 		hoverCtID = -1;
 		long arcID = -1, fieldIdx = -1;
-		if (UI_hoverOnCt){
-			fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
-			float ctx, cty;
-			screen2ctspace(x - windowWidth / 3, windowHeight - y, ctx, cty);
+		fieldIdx = GetFieldIdx(x - windowWidth / 3, windowHeight - y);
+		float ctx, cty;
+		screen2ctspace(x - windowWidth / 3, windowHeight - y, ctx, cty);
+		if (fieldIdx < 2){
 			arcID = fields[fieldIdx]->PickArc(ctx - offsetX[fieldIdx], cty - offsetY[fieldIdx], false);
+			if (arcID < 0){
+				arcID = fields[fieldIdx]->PickArcFromLabel(ctx - offsetX[fieldIdx], cty - offsetY[fieldIdx]);
+			}
+		}
+		else{
+			arcID = diffTree->PickArc(ctx - offsetX[fieldIdx], cty - offsetY[fieldIdx], false);
+			if (arcID < 0){
+				arcID = diffTree->PickArcFromLabel(ctx - offsetX[fieldIdx], cty - offsetY[fieldIdx]);
+			}
 		}
 		if (arcID >= 0){
-			drawHoverContur = true;
 			hoverCtID = fieldIdx;
 			hoverArcID = arcID;
+			if (UI_hoverOnCt){
+				drawHoverContur = true;
+			}
 			glutPostRedisplay();
 		}
-		else if (drawHoverContur){
-			drawHoverContur = false;
-			glutPostRedisplay();
+		else {
+			if (drawHoverContur){
+				drawHoverContur = false;
+				glutPostRedisplay();
+			}
+			if (hoverCtID >= 0){
+				hoverCtID = -1;
+				glutPostRedisplay();
+			}
 		}
-		//cout << "Hover ct: " << hoverCtID << ", Arc: " << hoverArcID << endl;
+		//cout << "Hover ct: " << hoverCtID << ", Arc: " << arcID << endl;
 	}
 }
 
@@ -1385,12 +1663,15 @@ void myGlutDisplay(void)
 	glClearColor(1, 1, 1, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, drawBuffer.frameBuffer);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glPushAttrib(GL_ALL_ATTRIB_BITS);
 	drawContourTrees(0, 0, drawBuffer.width, drawBuffer.height);
+	glPopAttrib();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	if (isMagnifying){
+		glPushAttrib(GL_ALL_ATTRIB_BITS);
 		if (useFisyeye){
 			glBindFramebuffer(GL_FRAMEBUFFER, fishEyeFBO.frameBuffer);
 			RenderFisheyeTexture(drawBuffer.colorTexture, 
@@ -1404,9 +1685,12 @@ void myGlutDisplay(void)
 			RenderTexture(drawBuffer.colorTexture, windowWidth / 3, 0, windowWidth * 2 / 3, windowHeight);
 			RenderZoomedTexture(drawBuffer.colorTexture, windowWidth / 3, 0, windowWidth * 2 / 3, windowHeight);
 		}
+		glPopAttrib();
 	}
 	else{
+		glPushAttrib(GL_ALL_ATTRIB_BITS);
 		RenderTexture(drawBuffer.colorTexture, windowWidth / 3, 0, windowWidth * 2 / 3, windowHeight);
+		glPopAttrib();
 	}
 	glEnable(GL_DEPTH_TEST);
 
@@ -1415,34 +1699,58 @@ void myGlutDisplay(void)
 	GLint initNames[] = { -1, -1, -1, -1 };
 	glClearBufferiv(GL_COLOR, 1, initNames);
 
+	glPushAttrib(GL_ALL_ATTRIB_BITS);
 	drawContours(0, 0, contourBuffer.width, contourBuffer.height);
+	glPopAttrib();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	//RenderTexture(contourBuffer.colorTexture, 0, 0, windowWidth / 3, windowHeight);
+
+	if (showTracks && UI_drawTrackVol == 1){
+		glPushAttrib(GL_ALL_ATTRIB_BITS);
+		MyGraphicsTool::SetViewport(MyVec4i(0, 0, windowWidth / 3, windowHeight));
+		glPushMatrix(); {
+			MyGraphicsTool::LoadTrackBall(&trackBall);
+			trackRenderer.SetDensityThreshold(UI_trackDensityFilter);
+			trackRenderer.SetSampleRate(UI_sampleRate);
+			trackRenderer.SetDecayFactor(UI_decayFactor);
+			trackRenderer.Show(windowWidth / 3, windowHeight);
+		}
+		glPopMatrix();
+		glPopAttrib();
+	}
+
+	glPushAttrib(GL_ALL_ATTRIB_BITS);
 	drawContours(0, 0, windowWidth / 3, windowHeight);
+	glPopAttrib();
 
 	drawTracks(0, 0, windowWidth / 3, windowHeight);
-	drawMesh(0, 0, windowWidth / 3, windowHeight);
-	glDisable(GL_DEPTH_TEST);
 
-	// draw inplace histogram
-	glViewport(0, 0, windowWidth / 3, windowHeight);
-	glDepthFunc(GL_ALWAYS);
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glLoadIdentity();
-	glOrtho(0, 1, 0, 1, -1, 1);
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	glLoadIdentity();
+	glPushAttrib(GL_ALL_ATTRIB_BITS);
+	drawMesh(0, 0, windowWidth / 3, windowHeight);
+	glPopAttrib();
+
 	if (drawInPlaceHist){
+		glPushAttrib(GL_ALL_ATTRIB_BITS);
+		// draw inplace histogram
+		glViewport(0, 0, windowWidth / 3, windowHeight);
+		glDepthFunc(GL_ALWAYS);
+		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+		glLoadIdentity();
+		glOrtho(0, 1, 0, 1, -1, 1);
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
 		fields[inPlaceHistCtId]->DrawArcHistogramAt(
 			inPlaceHistArcId, inPlaceHistX / (float)(windowWidth / 3),
 			inPlaceHistY / (float)windowHeight, 2, 0.5);
+		glPopMatrix();
+		glMatrixMode(GL_PROJECTION);
+		glPopMatrix();
+		glMatrixMode(GL_MODELVIEW);
+		glDepthFunc(GL_LESS);
+		glPopAttrib();
 	}
-	glPopMatrix();
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glDepthFunc(GL_LESS);
 
 	glutSwapBuffers();
 }
@@ -1479,7 +1787,11 @@ void myGlutReshape(int x, int y)
 	if (nameMap) delete[] nameMap;
 	nameMap = new int[contourBuffer.width*contourBuffer.height * 4];
 	if(showMesh) BuildGLBuffers(meshfbo);
+
+	fields[0]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	fields[1]->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
 	if (showDiffTree) diffTree->UpdateLabels(drawBuffer.width, drawBuffer.height / 3);
+	if (showTracks) trackRenderer.Resize(windowWidth / 3, windowHeight);
 	//fields[0]->SetupVolomeRenderingBuffers(tw / 3 * DSR_FACTOR_X, th * DSR_FACTOR_Y);
 
 	glutPostRedisplay();
@@ -1524,6 +1836,8 @@ int main(int argc, char* argv[])
 	/****************************************/
 
 	if (showTracks){
+		RicVolume volf("target_div10000.nii");
+		track.AddVolumeFilter(volf);
 		track.Read("C:\\Users\\GuohaoZhang\\Desktop\\tmpdata\\dti.trk");
 		//track.Read("ACR.trk");
 		track.SetShape(MyTracks::TRACK_SHAPE_LINE);
@@ -1531,6 +1845,8 @@ int main(int argc, char* argv[])
 		track.ComputeGeometry();
 		track.LoadShader();
 		track.LoadGeometry();
+
+		trackRenderer.CompileShader();
 	}
 
 	int nArg = argc - 1;
@@ -1543,6 +1859,7 @@ int main(int argc, char* argv[])
 	fields[0]->ComputeArcNames();
 	fields[0]->SetIsosurface(isovalue);
 	fields[0]->SetNodeXPositionsExt(defaultScale);
+	fields[0]->UpdateLabels(windowWidth * 2 / 3, windowHeight / 3);
 	fields[0]->SetContourColour(contourColor[0]);
 	fields[0]->SetIndex(0);
 	fields[0]->CompileContourShader();
@@ -1552,12 +1869,15 @@ int main(int argc, char* argv[])
 	if (showTracks){
 		fields[0]->MarkSelectedVoxes();
 		track.FilterByVolumeMask(fields[0]->GetMaskVolume());
+		updateTrackVolume();
 	}
 
 	if (showDiffTree){
 		tbssSigVol = new RicVolume("h16e0d1c26_stats_scz122ctr127_tfce_p_tstat4.nii.gz");
 		fields[0]->LoadVoxSignificance(tbssSigVol);
 		fields[0]->UpdateSigArcList();
+
+
 	}
 
 	if (showSecTree){
@@ -1571,6 +1891,7 @@ int main(int argc, char* argv[])
 			fields[1]->ComputeArcNames();
 			fields[1]->SetIsosurface(isovalue);
 			fields[1]->SetNodeXPositionsExt(defaultScale);
+			fields[1]->UpdateLabels(windowWidth * 2 / 3, windowHeight / 3);
 			fields[1]->SetContourColour(contourColor[1]);
 			fields[1]->SetIndex(1);
 			fields[1]->CompileContourShader();
@@ -1590,8 +1911,25 @@ int main(int argc, char* argv[])
 		diffTree = new MyDifferenceTree;
 		diffTree->SetContourTrees(fields[0], fields[1]);
 		diffTree->UpdateArcMapping();
-		diffTree->UpdateDifferenceHistogram();
+		//diffTree->UpdateDifferenceHistogram();
+		diffTree->UpdateDifferenceHistogramPixel();
+		diffTree->UpdateLayout();
 		diffTree->UpdateLabels(windowWidth * 2 / 3, windowHeight / 3);
+
+		/*
+		RicVolume vol0(argv[1]);
+		RicVolume vol1(argv[2]);
+		Array3D<float> diff;
+		diff.Construct(vol0.get_numx(), vol0.get_numy(), vol0.get_numz());
+		for (int i = 0; i < vol0.get_numx(); i++){
+			for (int j = 0; j < vol0.get_numy(); j++){
+				for (int k = 0; k < vol0.get_numz(); k++){
+					diff(i, j, k) = vol0.vox[i][j][k] - vol1.vox[i][j][k];
+				}
+			}
+		}
+		fields[0]->LoadDiffColorTexture(diff, diffTree->GetMinDiff(), diffTree->GetMaxDiff());
+		*/
 	}
 
 	if (showMesh){
@@ -1748,14 +2086,19 @@ int main(int argc, char* argv[])
 	component_panel->set_alignment(GLUI_ALIGN_LEFT);
 	UI_drawTracks = showTracks ? 1 : 0;
 	UI_drawMesh = showMesh ? 1 : 0;
-	GLUI_Checkbox* trackCheckbox = new GLUI_Checkbox(component_panel, "Show Tracks", &UI_drawTracks, -1, updateComponent);
-	GLUI_Checkbox* meshCheckbox = new GLUI_Checkbox(component_panel, "Show Mesh", &UI_drawMesh, -1, updateComponent);
+	trackCheckbox = new GLUI_Checkbox(component_panel, "Tracks", &UI_drawTracks, -1, updateComponent);
+	trackVolCheckbox = new GLUI_Checkbox(component_panel, "Track Volume", &UI_drawTrackVol, -1, updateComponent);
+	GLUI_Checkbox* meshCheckbox = new GLUI_Checkbox(component_panel, "Cortex Mesh", &UI_drawMesh, -1, updateComponent);
 	if (!showTracks) trackCheckbox->disable();
+	if (!showTracks) trackVolCheckbox->disable();
 	if (!showMesh) meshCheckbox->disable();
+	GLUI_Checkbox* drawContour0Checkbox = new GLUI_Checkbox(component_panel, "Contour 1", &UI_drawContour0);
+	GLUI_Checkbox* drawContour1Checkbox = new GLUI_Checkbox(component_panel, "Contour 2", &UI_drawContour1);
+	GLUI_Checkbox* Legend2D_Checkbox = new GLUI_Checkbox(component_panel, "2D Legend", &UI_2DLegend);
+	GLUI_Checkbox* Legend3D_Checkbox = new GLUI_Checkbox(component_panel, "3D Legend", &UI_3DLegend);
 	GLUI_Checkbox* hoverOnContourCheckbox = new GLUI_Checkbox(component_panel, "Contour Hover", &UI_hoverOnContour);
 	GLUI_Checkbox* hoverOnCtCheckbox = new GLUI_Checkbox(component_panel, "Tree Hover", &UI_hoverOnCt);
-	GLUI_Scrollbar* labelDrawRatioScrollbar = new GLUI_Scrollbar(component_panel, "Label Ratio", GLUI_SCROLL_HORIZONTAL, &UI_labelDrawRatio, 1, updateLabels);
-	labelDrawRatioScrollbar->set_float_limits(0, 1);
+	GLUI_Checkbox* diffColorCheckbox = new GLUI_Checkbox(component_panel, "Diff Contour", &UI_diffColor, -1, updateDiffTexture);
 
 	GLUI_Rollout *roi_panel = new GLUI_Rollout(glui, "ROI", 0);
 	roi_panel->set_alignment(GLUI_ALIGN_LEFT);
@@ -1763,6 +2106,8 @@ int main(int argc, char* argv[])
 	roiRatioSpinner = new GLUI_Spinner(roi_panel, "Region Ratio: ", &UI_roiRatio, 2, updateROI);
 	roiRatioSpinner->set_float_limits(0, 1);
 	roiRatioSpinner->disable();
+	GLUI_Button* branchAggregateButton = new GLUI_Button(roi_panel, "Aggregate", 0, aggregateAllBranchArcs);
+	GLUI_Button* branchRestoreButton = new GLUI_Button(roi_panel, "Restore", 0, restoreAllAggregated);
 
 
 	GLUI_Rollout* diff_panel = new GLUI_Rollout(glui, "Diff Tree", 0);
@@ -1773,12 +2118,55 @@ int main(int argc, char* argv[])
 	new GLUI_RadioButton(radioGroup_diff, "Union");
 	new GLUI_RadioButton(radioGroup_diff, "Complement");
 	radioGroup_diff->set_alignment(GLUI_ALIGN_LEFT);
+	GLUI_Checkbox* outsidePlacementCheckbox = new GLUI_Checkbox(diff_panel, "Outside Arc", &UI_outsidePlacement, -1, updateDiff);
+	new GLUI_StaticText(diff_panel, "Non-SigDiff Alpha");
+	GLUI_Scrollbar* diffLesserAlpha_slider = new GLUI_Scrollbar
+		(diff_panel, "Non-SigDiff Alpha", GLUI_SCROLL_HORIZONTAL, &UI_diffTreeLesserAlpha);
+	diffLesserAlpha_slider->set_float_limits(0, 1);
 
-	GLUI_Rollout* data_panel = new GLUI_Rollout(glui, "Change Skeleton Data", 0);
+	GLUI_Rollout* data_panel = new GLUI_Rollout(glui, "Change Data", 0);
 	data_panel->set_alignment(GLUI_ALIGN_LEFT);
 	new GLUI_Button(data_panel, "Control", 0, updateOpenFile);
 	new GLUI_Button(data_panel, "Diseased", 1, updateOpenFile);
 	new GLUI_Button(data_panel, "TBSS stats", 2, updateOpenFile);
+	new GLUI_Button(data_panel, "Tracks", 3, updateOpenFile);
+
+	GLUI_Rollout* track_panel = new GLUI_Rollout(glui, "Tracks", 0);
+	track_panel->set_alignment(GLUI_ALIGN_LEFT);
+	new GLUI_StaticText(track_panel, "Density Filter");
+	GLUI_Scrollbar* trackDensity_Slider = new GLUI_Scrollbar
+		(track_panel, "Density Filter", GLUI_SCROLL_HORIZONTAL, &UI_trackDensityFilter);
+	trackDensity_Slider->set_float_limits(0, 1);
+	new GLUI_StaticText(track_panel, "Sample Rate");
+	GLUI_Scrollbar* sampleRate_Slider = new GLUI_Scrollbar
+		(track_panel, "Sample Rate", GLUI_SCROLL_HORIZONTAL, &UI_sampleRate);
+	sampleRate_Slider->set_float_limits(8, 8192);
+	new GLUI_StaticText(track_panel, "Decay Factor");
+	GLUI_Scrollbar* decayFactor_Slider = new GLUI_Scrollbar
+		(track_panel, "Decay Factor", GLUI_SCROLL_HORIZONTAL, &UI_decayFactor);
+	decayFactor_Slider->set_float_limits(8, 8192);
+	new GLUI_StaticText(track_panel, "Mesh Transparency");
+	GLUI_Scrollbar* meshTransparency_Slider = new GLUI_Scrollbar
+		(track_panel, "Mesh Transparency", GLUI_SCROLL_HORIZONTAL, &transparencyExponent);
+	meshTransparency_Slider->set_float_limits(0, 128);
+
+
+	GLUI_Rollout* label_panel = new GLUI_Rollout(glui, "Label", 0);
+	label_panel->set_alignment(GLUI_ALIGN_LEFT);
+	new GLUI_StaticText(label_panel, "Display Ratio");
+	GLUI_Scrollbar* labelDrawRatioScrollbar = new GLUI_Scrollbar(label_panel, "Label Ratio", GLUI_SCROLL_HORIZONTAL, &UI_labelDrawRatio, 1, updateLabels);
+	labelDrawRatioScrollbar->set_float_limits(0, 1);
+	GLUI_Checkbox* labelSolid_Checkbox = new GLUI_Checkbox(label_panel, "Solid", &UI_labelSolid, 2, updateLabels);
+	//GLUI_Checkbox* labelBoarder_Checkbox = new GLUI_Checkbox(label_panel, "Boarder", &UI_labelBoarder, 3, updateLabels);
+
+	GLUI_Rollout* viewpoint_panel = new GLUI_Rollout(glui, "Camera", 0);
+	viewpoint_panel->set_alignment(GLUI_ALIGN_LEFT);
+	new GLUI_Button(viewpoint_panel, "Superior_Up", 1, setViewpoint);
+	new GLUI_Button(viewpoint_panel, "Superior_Down", 2, setViewpoint);
+	new GLUI_Button(viewpoint_panel, "Right", 3, setViewpoint);
+	new GLUI_Button(viewpoint_panel, "Left", 4, setViewpoint);
+	new GLUI_Button(viewpoint_panel, "Posterior", 5, setViewpoint);
+	new GLUI_Button(viewpoint_panel, "Anterior", 6, setViewpoint);
 
 	glui->set_main_gfx_window(main_window);
 

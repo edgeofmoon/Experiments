@@ -3,6 +3,7 @@
 #include "MyContourTree.h"
 #include "FollowCubeTables.h"
 #include "Shader.h"
+#include "ColorScaleTable.h"
 
 #include <queue>
 #include <math.h>
@@ -22,7 +23,7 @@ void MyContourTree::RenderContour(long arc){
 		FollowHierarchicalPathSeed(arc, superarcs[arc].seedValue);
 }
 
-void MyContourTree::FollowHierarchicalPathSeed(int sArc, float ht){
+void MyContourTree::FollowHierarchicalPathSeedUnagregated(int sArc, float ht){
 	long whichArc = sArc;
 	while (superarcs[whichArc].topArc != NO_SUPERARC){
 		if (*(supernodes[superarcs[superarcs[whichArc].topArc].bottomID].value) <= ht)
@@ -37,6 +38,36 @@ void MyContourTree::FollowHierarchicalPathSeed(int sArc, float ht){
 
 	pathLengths[sArc] = pathLength;
 	nContourTriangles[sArc] = triangleCount;
+}
+
+// need special treatment for aggregated arcs
+void MyContourTree::FollowHierarchicalPathSeed(int sArc, float ht){
+	long whichArc = sArc;
+	if (this->IsArcAggregated(whichArc)){
+		queue<long> arc2visit;
+		arc2visit.push(whichArc);
+		while (!arc2visit.empty()){
+			long thisArc = arc2visit.front();
+			arc2visit.pop();
+			if (*(GetUnaggregatedNode(GetUnaggregatedArc(thisArc).topID).value) <= ht){
+				long topNodeId = GetUnaggregatedArc(thisArc).topID;
+				long theArc = GetUnaggregatedNode(topNodeId).upList;;
+				for (long i = 0; i < GetUnaggregatedNode(topNodeId).upDegree; i++){
+					arc2visit.push(theArc);
+					theArc = GetUnaggregatedArc(theArc).nextUp;
+				}
+			}
+			// if thisArc intersects, its upper children won't
+			else if (*(GetUnaggregatedNode(GetUnaggregatedArc(thisArc).bottomID).value) <= ht){
+				//FollowContour(ht, GetUnaggregatedArc(thisArc));
+				FollowHierarchicalPathSeedUnagregated(thisArc, ht);
+			}
+		}
+	}
+	else {
+		//FollowContour(ht, superarcs[whichArc]);
+		FollowHierarchicalPathSeedUnagregated(sArc, ht);
+	}
 }
 
 void MyContourTree::FollowContour(float ht, Superarc& theArc){
@@ -282,6 +313,9 @@ void MyContourTree::DestoryContourDrawingBuffer(){
 		glDeleteBuffers(1, &mIndexBuffer);
 	}
 	glDeleteProgram(mContourShaderProgram);
+	if (glIsTexture(mDiffColorTexture)){
+		glDeleteTextures(1, &mDiffColorTexture);
+	}
 }
 
 void MyContourTree::LoadContourGeometry(){
@@ -330,6 +364,23 @@ void MyContourTree::RenderContours(){
 
 	int colorLocation = glGetUniformLocation(mContourShaderProgram, "color");
 	glUniform3fv(colorLocation, 1, mContourColour);
+
+	if (glIsTexture(mDiffColorTexture)){
+		int diffLocation = glGetUniformLocation(mContourShaderProgram, "colorTexture");
+		glUniform1i(diffLocation, 0);
+		glActiveTexture(GL_TEXTURE0 + 0);
+		glBindTexture(GL_TEXTURE_3D, mDiffColorTexture);
+
+		diffLocation = glGetUniformLocation(mContourShaderProgram, "volSize");
+		glUniform3f(diffLocation, height.XDim(), height.YDim(), height.ZDim());
+
+		diffLocation = glGetUniformLocation(mContourShaderProgram, "bUseTextureColor");
+		glUniform1i(diffLocation, 1);
+	}
+	else{
+		int diffLocation = glGetUniformLocation(mContourShaderProgram, "bUseTextureColor");
+		glUniform1i(diffLocation, 0);
+	}
 
 	glDrawElements(GL_TRIANGLES, mNumVertices, GL_UNSIGNED_INT, 0);
 	glBindVertexArray(0);
@@ -436,6 +487,48 @@ void MyContourTree::BuildContourGeomeryBuffer(){
 	glDrawBuffers(2, DrawBuffers);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	*/
+}
+
+void MyContourTree::LoadDiffColorTexture(Array3D<float>& diffs, float minDiff, float maxDiff){
+	float *texColors = new float[diffs.NElements() * 4];
+	// be careful with different arrangement
+	// between opengl and Array3D
+	int idx = 0;
+	for (int k = 0; k < diffs.ZDim(); k++){
+		for (int j = 0; j < diffs.YDim(); j++){
+			for (int i = 0; i < diffs.XDim(); i++){
+				float rgba[4];
+				float diff = diffs(i,j,k);
+				ColorScaleTable::DiffValueToColor(diff, minDiff, maxDiff, rgba);
+				memcpy(texColors + idx * 4, rgba, 4 * sizeof(float));
+				idx++;
+			}
+		}
+	}
+
+	if (glIsTexture(mDiffColorTexture)){
+		glDeleteTextures(1, &mDiffColorTexture);
+	}
+	glGenTextures(1, &mDiffColorTexture);
+	glBindTexture(GL_TEXTURE_3D, mDiffColorTexture);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, diffs.XDim(), diffs.YDim(), diffs.ZDim(), 0, GL_RGBA, GL_FLOAT, texColors);
+	delete[] texColors;
+
+	glBindTexture(GL_TEXTURE_3D, 0);
+}
+
+void MyContourTree::RemoveDiffColorTexture(){
+	if (glIsTexture(mDiffColorTexture)){
+		glDeleteTextures(1, &mDiffColorTexture);
+	}
+	mDiffColorTexture = -1;
 }
 
 void MyContourTree::SetContourColour(float color[3]){
@@ -612,6 +705,23 @@ void MyContourTree::DrawArcContour(long arc){
 	int colorLocation = glGetUniformLocation(mContourShaderProgram, "color");
 	glUniform3fv(colorLocation, 1, mContourColour);
 
+	if (glIsTexture(mDiffColorTexture)){
+		int diffLocation = glGetUniformLocation(mContourShaderProgram, "colorTexture");
+		glUniform1i(diffLocation, 0);
+		glActiveTexture(GL_TEXTURE0 + 0);
+		glBindTexture(GL_TEXTURE_3D, mDiffColorTexture);
+
+		diffLocation = glGetUniformLocation(mContourShaderProgram, "volSize");
+		glUniform3f(diffLocation, height.XDim(), height.YDim(), height.ZDim());
+
+		diffLocation = glGetUniformLocation(mContourShaderProgram, "bUseTextureColor");
+		glUniform1i(diffLocation, 1);
+	}
+	else{
+		int diffLocation = glGetUniformLocation(mContourShaderProgram, "bUseTextureColor");
+		glUniform1i(diffLocation, 0);
+	}
+
 	glDrawElements(GL_TRIANGLES, numVertices, GL_UNSIGNED_INT, 0);
 	glBindVertexArray(0);
 	glUseProgram(0);
@@ -656,6 +766,23 @@ void MyContourTree::RenderAllUpperLeaveContours(float voxelRatio){
 
 	int colorLocation = glGetUniformLocation(mContourShaderProgram, "color");
 	glUniform3fv(colorLocation, 1, mContourColour);
+
+	if (glIsTexture(mDiffColorTexture)){
+		int diffLocation = glGetUniformLocation(mContourShaderProgram, "colorTexture");
+		glUniform1i(diffLocation, 0);
+		glActiveTexture(GL_TEXTURE0 + 0);
+		glBindTexture(GL_TEXTURE_3D, mDiffColorTexture);
+
+		diffLocation = glGetUniformLocation(mContourShaderProgram, "volSize");
+		glUniform3f(diffLocation, height.XDim(), height.YDim(), height.ZDim());
+
+		diffLocation = glGetUniformLocation(mContourShaderProgram, "bUseTextureColor");
+		glUniform1i(diffLocation, 1);
+	}
+	else{
+		int diffLocation = glGetUniformLocation(mContourShaderProgram, "bUseTextureColor");
+		glUniform1i(diffLocation, 0);
+	}
 
 	glDrawElements(GL_TRIANGLES, numVertices, GL_UNSIGNED_INT, 0);
 	glBindVertexArray(0);

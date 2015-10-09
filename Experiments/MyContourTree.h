@@ -2,6 +2,7 @@
 #include "HeightField.h"
 #include "MyFrameBuffer.h"
 #include "MyVec.h"
+#include "MyBox.h"
 #include <list>
 #include <vector>
 #include <map>
@@ -52,7 +53,13 @@ public:
 		HistogramSide_Sym = 0,
 		HistogramSide_Left = 1,
 		HistogramSide_Right = 2,
-	};
+	}; 
+
+public:
+	float GetValue(long x, long y, long z) { return height(x, y, z); };
+	float GetDimX() { return height.XDim(); };
+	float GetDimY() { return height.YDim(); };
+	float GetDimZ() { return height.ZDim(); };
 
 protected:
 	MappingScale mDefaultScale;
@@ -80,6 +87,7 @@ public:
 	void DrawArcBackLight(long arc);
 	void DrawContourTreeFrame();
 	void DrawArcLabels();
+	void DrawArcLabelHighlight(long arc);
 	void DrawArcLabelsUnoccluded();
 	void DrawPlanarContourTree();
 	void DrawSelectedVoxes(bool useDisplayLists, bool pickColours);
@@ -87,13 +95,25 @@ public:
 	void DrawSelectedArcVoxes(long arc, float isoValue);
 	void PruneNoneROIs();
 	void UpdateArcNodes();
+	void UpdateLabels(int width, int height);
 	void SingleCollapse(long whichArc);
 	long CollapseVertex(long whichSupernode);
 	std::string ComputeArcName(long arc);
 	void ComputeArcNames();
 	long GetArcRoiCount(long arc);
 	int PickArc(float x, float y, bool printInfo = true);
+	int PickArcFromLabel(float x, float y);
+
 	void SetPruningThreshold(int thres){ mPruningThreshold = thres; };
+	void SetLabelDrawRatio(float ratio) {
+		mLabelDrawRatio = ratio;
+	};
+
+	enum LabelStyleBit{
+		LabelStyle_BOARDER = 1,
+		LabelStyle_SOLID = 2
+	};
+	void SetLabelStyle(unsigned char style){ mLabelStyle = style; };
 
 protected:
 	int mPruningThreshold;
@@ -102,6 +122,12 @@ protected:
 	std::map<int, std::string> mLabelName;
 	std::map<long, vector<float*>> mArcNodes;
 	std::map<long, std::string> mArcName;
+	// for label layout
+	std::map<long, MyBox2f> mLabelPos;
+	std::vector<long> mArcLabelSorted;
+	float mLabelDrawRatio;
+
+	unsigned char mLabelStyle;
 
 	bool IsNameLeft(std::string name) const;
 	bool IsNameRight(std::string name) const;
@@ -173,6 +199,7 @@ protected:
 	float GetArcZoomLevel(long arc) const;
 	float getArcWidth(long arc) const;
 	float GetArcWidth(long arc, MappingScale scale) const;
+	MyBox2f GetArcBox(long arc) const;
 	void getSubArcs(long rootNode, long parentArc, std::vector<long>& subArcs);
 	float getSubTreeWidth(long rootNode, long parentNode);
 	float subTreeLayoutWidth(long rootNode, long parentNode);
@@ -292,6 +319,7 @@ protected:
 	int mNumVertices;
 
 	void RenderContour(long arc);
+	void FollowHierarchicalPathSeedUnagregated(int sArc, float ht);
 	void FollowHierarchicalPathSeed(int sArc, float ht);
 	void FollowContour(float ht, Superarc &theArc);
 	void FollowSurface(float ht, float *p1, float *p2);
@@ -317,12 +345,16 @@ protected:
 	unsigned int mColorTexture;
 	unsigned int mDepthTexture;
 	unsigned int mNameTexture;
+
+	unsigned int mDiffColorTexture;
 public:
 	void SetContourColour(float color[3]);
 	void SetIndex(int idx);
 	int GetIndex() const;
 	void CompileContourShader();
 	void BuildContourGeomeryBuffer();
+	void LoadDiffColorTexture(Array3D<float>& diffs, float minDiff, float maxDiff);
+	void RemoveDiffColorTexture();
 	void FlexibleContours();
 	void UpdateContours();
 	void RenderContours();
@@ -414,12 +446,21 @@ protected:
 	std::map<long, Supernode> mNodeAggregateRestore;
 	std::map<long, std::vector<float*>> mArcAggregateHistogramRestore;
 
+	Superarc GetUnaggregatedArc(long arc) const;
+	Supernode GetUnaggregatedNode(long node) const;
+
 public:
 	bool IsArcAggregated(long arc) const;
 	void AggregateArcFromAbove(long arc);
 	void RestoreAggregatedArc(long arc);
+	void RestoreAllAggregated();
+	void AggregateAllBranches();
 
 	friend class MyDifferenceTree;
+
+// statif functions
+	static MyContourTree* TemplateTree;
+	static bool compareArcMore(long arc0, long arc1);
 };
 
 int compareAbsHeight(const float *d1, const float *d2, const float *base);

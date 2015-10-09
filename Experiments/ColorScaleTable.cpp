@@ -1,6 +1,6 @@
 #include "ColorScaleTable.h"
 
-unsigned char colorBrewer_sequential_8_singlehue_3[8][3] = {
+unsigned char ColorScaleTable::colorBrewer_sequential_8_singlehue_3[8][3] = {
 	{ 0xff, 0xff, 0xff },
 	{ 0xf0, 0xf0, 0xf0 },
 	{ 0xd9, 0xd9, 0xd9 },
@@ -25,7 +25,7 @@ unsigned char colorBrewer_sequential_8_multihue_9[8][3] = {
 */
 
 // this is actually faked from sequential_9_multihue
-unsigned char colorBrewer_sequential_8_multihue_9[8][3] = {
+unsigned char ColorScaleTable::colorBrewer_sequential_8_multihue_9[8][3] = {
 //	{ 0xf7, 0xfc, 0xf5 },
 	{ 0xe5, 0xf5, 0xe0 },
 	{ 0xc7, 0xe9, 0xc0 },
@@ -36,3 +36,18 @@ unsigned char colorBrewer_sequential_8_multihue_9[8][3] = {
 	{ 0x00, 0x6d, 0x2c },
 	{ 0x00, 0x44, 0x1b },
 };
+
+void ColorScaleTable::DiffValueToColor(float diff, float minDiff, float maxDiff, float color_rgba[4]){
+	if (diff <= 0){
+		color_rgba[0] = 1;
+		color_rgba[1] = 1 - diff / minDiff;
+		color_rgba[2] = 1 - diff / minDiff;
+	}
+	else{
+		color_rgba[2] = 1;
+		color_rgba[1] = 1 - diff / maxDiff;
+		color_rgba[0] = 1 - diff / maxDiff;
+	}
+	color_rgba[3] = 1;
+}
+

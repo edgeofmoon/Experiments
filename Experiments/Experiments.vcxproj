@@ -236,6 +236,7 @@
     <ClCompile Include="MyContourTree_Prune.cpp" />
     <ClCompile Include="MyContourTree_VolumeRendering.cpp" />
     <ClCompile Include="MyDifferenceTree.cpp" />
+    <ClCompile Include="MyDiffHistogramPixel.cpp" />
     <ClCompile Include="MyGraphicsTool.cpp" />
     <ClCompile Include="MyHalfEdgeMesh.cpp" />
     <ClCompile Include="MyImage.cpp" />
@@ -260,6 +261,7 @@
     <ClCompile Include="MyTrackBall.cpp" />
     <ClCompile Include="MyTracks.cpp" />
     <ClCompile Include="MyTracts.cpp" />
+    <ClCompile Include="MyVolumeRenderer.cpp" />
     <ClCompile Include="OSCB.cpp" />
     <ClCompile Include="Ric\adler32.c" />
     <ClCompile Include="Ric\compress.c" />
@@ -333,6 +335,7 @@
     <ClInclude Include="MyColor4.h" />
     <ClInclude Include="MyContourTree.h" />
     <ClInclude Include="MyDifferenceTree.h" />
+    <ClInclude Include="MyDiffHistogramPixel.h" />
     <ClInclude Include="MyFrameBuffer.h" />
     <ClInclude Include="MyGraphicsTool.h" />
     <ClInclude Include="MyHalfEdgeMesh.h" />
@@ -352,6 +355,7 @@
     <ClInclude Include="MyTracts.h" />
     <ClInclude Include="MyUtility.h" />
     <ClInclude Include="MyVec.h" />
+    <ClInclude Include="MyVolumeRenderer.h" />
     <ClInclude Include="OSCB.h" />
     <ClInclude Include="Ric\crc32.h" />
     <ClInclude Include="Ric\deflate.h" />
@@ -396,6 +400,11 @@
     <None Include="raycasting.vert" />
     <None Include="selVol.frag" />
     <None Include="selVol.vert" />
+    <None Include="tracks.frag" />
+    <None Include="tracks.vert" />
+    <None Include="trackVol.frag" />
+    <None Include="trackVol.vert" />
+    <None Include="trackVol_pcwLinear.frag" />
     <None Include="tube.frag" />
     <None Include="tube.vert" />
   </ItemGroup>

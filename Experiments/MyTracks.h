@@ -5,9 +5,11 @@
 #include <vector>
 
 #include "RicPoint.h"
+#include "RicVolume.h"
 #include "MyArray.h"
 #include "MyColor4.h"
 #include "Array3D.h"
+#include <atomic>
 
 class MySingleTrackData
 {
@@ -120,11 +122,19 @@ public:
 protected:
 	MyArrayi mFiberToDraw;
 	MyArrayb mFiberDraw;
-	static void MaskFiber(MyTracks* tracks, Array3D<float>* mask, int startIdx, int endIdx);
+	static void MaskFiber(MyTracks* tracks, 
+		Array3D<float>* mask, int startIdx, int endIdx);
+	static void FiberVolumeDensity(MyTracks* tracks, 
+		Array3D<atomic<int>>* density, const MyArrayi* indices, int startIdx, int endIdx);
+
+	RicVolume* mFilterVolume;
+	unsigned int mFilterVolumeTexture;
 
 public:
 	void GetVoxelIndex(const MyVec3f vertex, long &x, long &y, long &z) const;
 	void FilterByVolumeMask(Array3D<float>& mask);
+	void AddVolumeFilter(RicVolume& vol);
+	void ToDensityVolume(float* densityVol, int x, int y, int z);
 };
 	
 

@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 using namespace std;
+using namespace ColorScaleTable;
 
 void MyContourTree::updateArcHistogram(long arc){
 	vector<float*>& voxes = mArcNodes[arc];
@@ -133,6 +134,37 @@ float MyContourTree::GetArcWidth(long arc, MappingScale scale) const{
 			return GetDrawingHeight(*max_element(histogram.begin(), histogram.end()), scale)*arcZoom;
 		}
 	}
+}
+
+MyBox2f MyContourTree::GetArcBox(long arc) const{
+	long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+	float xPos1;
+	if (supernodesExt[topNode].numLeaves <= supernodesExt[bottomNode].numLeaves){
+		xPos1 = supernodes[topNode].xPosn;
+	}
+	else{
+		xPos1 = supernodes[bottomNode].xPosn;
+	}
+	float yBottom = supernodes[bottomNode].yPosn;
+	float yTop = supernodes[topNode].yPosn;
+	float arcWidth = this->getArcWidth(arc);
+	float xPos2;
+	switch (mHistogramSide)
+	{
+	case MyContourTree::HistogramSide_Sym:
+		xPos2 = xPos1 + arcWidth / 2;
+		xPos1 -= arcWidth / 2;
+		break;
+	case MyContourTree::HistogramSide_Left:
+		xPos2 = xPos1;
+		xPos1 -= arcWidth;
+		break;
+	default:
+	case MyContourTree::HistogramSide_Right:
+		xPos2 = xPos1 + arcWidth;
+		break;
+	}
+	return MyBox2f(MyVec2f(xPos1, yBottom), MyVec2f(xPos2, yTop));
 }
 
 void MyContourTree::getSubArcs(long rootNode, long parentArc, std::vector<long>& subArcs){

@@ -3,6 +3,7 @@
 #include "MySpaceFillingNaive.h"
 #include "MyPrimitiveDrawer.h"
 #include "ColorScaleTable.h"
+using namespace ColorScaleTable;
 
 void MyContourTree::LoadVoxSignificance(RicVolume* vol){
 
@@ -427,7 +428,7 @@ void MyContourTree::UpdatePathArcs(){
 		long arc = mSigArcs[i];
 		std::vector<long> path;
 		FindPathDown(superarcs[arc].bottomID, lowestNode, path);
-		for (int j = 0; j < path.size()-1; j++){
+		for (int j = 0; j < (int)path.size()-1; j++){
 			long pathArc = nodes2Arc(path[j], path[j + 1]);
 			mPathArcs[pathArc] = true;
 		}

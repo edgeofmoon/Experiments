@@ -8,6 +8,7 @@
 #include <cstring>
 #include <GL/freeglut.h>
 
+#include <stdlib.h>
 #include <vector>
 #include <algorithm>
 #include <iostream>
@@ -17,6 +18,10 @@
 #include <map>
 #include <queue>
 using namespace std;
+using namespace ColorScaleTable;
+
+
+MyContourTree* MyContourTree::TemplateTree = 0;
 
 int compareAbsHeight(const float *d1, const float *d2, const float *base)								//	comparison function for all other purposes
 {
@@ -275,7 +280,14 @@ MyContourTree::MyContourTree(int argc, char** argv)
 	mArcCombineMode = ArcCombineMode_Union;
 	mNonSigArcWidth = 0.0001;
 	mContourHoveredArc = -1;
-	this->SetName(argv[1]);
+	char drive[_MAX_DRIVE];
+	char dir[_MAX_DIR];
+	char fname[_MAX_FNAME];
+	char ext[6];
+	_splitpath_s(argv[1], drive, dir, fname, ext);
+	this->SetName(fname);
+	mLabelDrawRatio = 1;
+	mLabelStyle = LabelStyle_SOLID | LabelStyle_BOARDER;
 }
 
 
@@ -2342,7 +2354,96 @@ void MyContourTree::DrawArcLabels(){
 	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
 }
 
+
+void MyContourTree::DrawArcLabelHighlight(long arc){
+	void * font = GLUT_BITMAP_HELVETICA_18;
+	long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+	MyBox2f box = mLabelPos[arc];
+	string name = mArcName[arc];
+	glLineWidth(3);
+	glColor4f(0, 0, 0, mContourTreeAlpha);
+	MyPrimitiveDrawer::DrawLineAt(MyVec2f(supernodes[topNode].xPosn, supernodes[topNode].yPosn),
+		box.GetLowPos());
+	if (mLabelStyle & LabelStyle_SOLID){
+		glColor4f(0, 0, 0, mContourTreeAlpha);
+		glBegin(GL_QUADS);
+		glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+		glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+		glEnd();
+	}
+	if (mLabelStyle & LabelStyle_BOARDER){
+		glColor4f(1, 1, 1, mContourTreeAlpha);
+		glBegin(GL_LINE_LOOP);
+		glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+		glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+		glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+		glEnd();
+	}
+	if (mLabelStyle & LabelStyle_SOLID){
+		glColor4f(1, 1, 1, mContourTreeAlpha);
+	}
+	else{
+		glColor4f(0, 0, 0, mContourTreeAlpha);
+	}
+	glRasterPos2f(box.GetLowPos()[0], box.GetLowPos()[1] + 0.01);
+	glutBitmapString(font, (const unsigned char*)name.c_str());
+	glLineWidth(1);
+}
+
+void MyContourTree::UpdateLabels(int width, int height){
+	mLabelPos.clear();
+	mArcLabelSorted.clear();
+	MySpaceFillingSpiral spaceFill;
+	for (int i = 0; i < nValidArcs;i++){
+		long arc = valid[i];
+		mArcLabelSorted.push_back(arc);
+	}
+
+	TemplateTree = this;
+	sort(mArcLabelSorted.begin(), mArcLabelSorted.end(), compareArcMore);
+
+	for (int i = 0; i < nValidArcs; i++){
+		long arc = valid[i];
+		MyBox2f box = this->GetArcBox(arc);
+		spaceFill.ForceAddBox(box);
+	}
+
+	// label
+	float cutSize = 0.005;
+	float pixelWidth = 1.1f / width;
+	float pixelHeight = 1.1f / height * 2; // why times 2?
+	void * font = GLUT_BITMAP_HELVETICA_18;
+	for (int i = 0; i<mArcLabelSorted.size(); i++){
+		long arc = mArcLabelSorted[i];
+
+		long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+
+		// draw label
+		if (mLabelVolume){
+			string name = mArcName[arc];
+			//if (supernodes[topNode].IsLowerLeaf() || supernodes[topNode].IsUpperLeaf()){
+			float length = 0;
+			for (int i = 0; i < name.size(); i++){
+				length += glutBitmapWidth(font, name[i]);
+			}
+			//MyVec2f lowPos(mCt0->supernodes[topNode].xPosn - length / 2 * pixelWidth,
+			//	mCt0->supernodes[bottomNode].yPosn + cutSize + mArcDiffHistogram[arc].mMax - mArcDiffHistogram[arc].mMin);
+
+			MyVec2f lowPos = MyVec2f(supernodes[topNode].xPosn, supernodes[topNode].yPosn)
+				+ MyVec2f(-length / 2 * pixelWidth, cutSize);
+			MyVec2f highPos = lowPos + MyVec2f(length * pixelWidth, glutBitmapHeight(font)*pixelHeight / 2);
+			//MyBox2f box = spaceFill.PushBoxFromTop(MyBox2f(lowPos, highPos), 0.0001);
+			MyBox2f box = spaceFill.PushBox(MyBox2f(lowPos, highPos), MyVec2f(0.005, 0));
+			mLabelPos[arc] = box;
+		}
+	}
+}
+
 void MyContourTree::DrawArcLabelsUnoccluded(){
+	/*
 	float cutSize = 0.005;																//	relative length of cuts
 	int viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
@@ -2376,7 +2477,51 @@ void MyContourTree::DrawArcLabelsUnoccluded(){
 			}
 		}
 	}
+	*/
+	// label
+	float cutSize = 0.005;
+	// draw the leader lines
+	for (int i = 0; i<mArcLabelSorted.size()*mLabelDrawRatio; i++){
+		long arc = mArcLabelSorted[i];
+		long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+		MyBox2f box = mLabelPos[arc];
+		MyPrimitiveDrawer::DrawLineAt(MyVec2f(supernodes[topNode].xPosn, supernodes[topNode].yPosn),
+			box.GetLowPos());
+	}
+	void * font = GLUT_BITMAP_HELVETICA_18;
+	//void * font = GLUT_BITMAP_TIMES_ROMAN_24;
+	for (int i = 0; i<mArcLabelSorted.size()*mLabelDrawRatio; i++){
+		long arc = mArcLabelSorted[i];
 
+		long topNode = superarcs[arc].topID, bottomNode = superarcs[arc].bottomID;
+		MyBox2f box = mLabelPos[arc];
+		string name = mArcName[arc];
+		// draw the box
+		if (mLabelStyle & LabelStyle_SOLID){
+			glColor4f(1, 1, 1, mContourTreeAlpha);
+			glBegin(GL_QUADS);
+			glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+			glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+			glEnd();
+		}
+		if (mLabelStyle & LabelStyle_BOARDER){
+			glColor4f(0, 0, 0, mContourTreeAlpha);
+			glBegin(GL_LINE_LOOP);
+			glVertex2f(box.GetLowPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetLowPos()[1]);
+			glVertex2f(box.GetHighPos()[0], box.GetHighPos()[1]);
+			glVertex2f(box.GetLowPos()[0], box.GetHighPos()[1]);
+			glEnd();
+		}
+		glRasterPos3f(box.GetLowPos()[0], box.GetLowPos()[1] + 0.01, 1);
+		glutBitmapString(font, (const unsigned char*)name.c_str());
+	}
+	int viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	float pixelWidth = 1.f / viewport[2];
+	float pixelHeight = 1.f / (viewport[3] / 2);
 	glColor4f(0, 0, 0, mContourTreeAlpha);
 	glRasterPos2f(0.01, 1.02);
 	glutBitmapString(GLUT_BITMAP_TIMES_ROMAN_24, (const unsigned char*)mName.c_str());
@@ -2720,6 +2865,17 @@ int MyContourTree::PickArc(float x, float y, bool printInfo)								//	picks an 
 	return whichArc;												//	return the one we found (if any)
 } // PickArc()
 
+int MyContourTree::PickArcFromLabel(float x, float y){
+	for (int i = 0; i < mArcLabelSorted.size()*mLabelDrawRatio; i++){
+		long arc = mArcLabelSorted[i];
+		MyBox2f box = mLabelPos[arc];
+		if (box.IsIntersected(MyVec2f(x, y))){
+			return arc;
+		}
+	}
+	return -1;
+}
+
 long MyContourTree::GetArcRoiCount(long arc){
 	//return superarcs[arc].nodesOnArc;
 	long count = 0;
@@ -3032,3 +3188,8 @@ long MyContourTree::CollapseVertex(long whichSupernode)							//	collapses a ver
 	
 	return newSArc;
 	} // CollapseVertex()
+
+
+bool MyContourTree::compareArcMore(long arc0, long arc1){
+	return TemplateTree->mArcNodes[arc0].size() > TemplateTree->mArcNodes[arc1].size();
+}
